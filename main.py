@@ -83,6 +83,7 @@ def run_trials():
 
     plot_distributions()
 
+
 def print_statisticts(statistics):
     for key, value in statistics.items():
         print(key)
@@ -92,6 +93,7 @@ def print_statisticts(statistics):
         print("no decision: " + str(value['no_decision']) + " (" + str(round(value['no_decision'] / total_number * 100, 2)) + " %)")
         print("#examples: " + str(total_number))
         print(value['not_correct_examples'])
+
 
 if __name__ == '__main__':
     statistics = {'igci': dict(), 'iacm': dict()}
