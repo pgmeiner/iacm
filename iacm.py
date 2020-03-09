@@ -6,21 +6,6 @@ from data_preparation import get_probabilities, get_probabilities_intervention, 
     getContingencyTables, pre_process_data, discretize_data, cluster_data, split_data
 from plot import plot_distribution
 
-def approximateToCausalModel(obsConTable, ExpConTable, drawObsData, color):
-    Pxy, Pxny, Pnxy, Pnxny = get_probabilities(obsConTable)
-    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention(ExpConTable)
-    print("Pxy:" + str(Pxy) + " Pxny:" + str(Pxny) + " Pnxy:" + str(Pnxy) + " Pnxny:" + str(Pnxny))
-    if drawObsData:
-        plot_distribution(Pxy, Pxny, Pnxy, Pnxny, "black")
-    print("Py_x:" + str(Py_x) + " Py_nx:" + str(Py_nx) + " Pny_x:" + str(Pny_x) + " Pny_nx:" + str(Pny_nx))
-    modeldata = FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx)
-    print("approximated distribution")
-    if "Pxy" in modeldata:
-        print("Pxy:" + str(modeldata["Pxy"]) + " Pxny:" + str(modeldata["Pxny"]) + " Pnxy:" + str(
-            modeldata["Pnxy"]) + " Pnxny:" + str(modeldata["Pnxny"]))
-        plot_distribution(modeldata["Pxy"], modeldata["Pxny"], modeldata["Pnxy"], modeldata["Pnxny"], color)
-    return modeldata
-
 
 def count_char(str, char_to_count):
     count = 0
@@ -43,10 +28,24 @@ def replace_char_by_char(char_to_replaced, str_to_be_replaced, to_be_inserted_st
     return final_str
 
 
-def marginalDistribution(P, fixed_code):
-    nb_x = count_char(fixed_code, 'x')
+def generate_codes(pattern):
+    nb_x = count_char(pattern, 'x')
     format_str = '{0:0xb}'.replace('x', str(nb_x))
-    return sum([P[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0,pow(2, nb_x))])
+    codes = [replace_char_by_char('x', pattern, format_str.format(nb)) for nb in range(0,pow(2,nb_x))]
+    return codes
+
+
+def convert_binary_to_constraint_line(codes):
+    positions = list()
+    for code in codes:
+        positions.append(int(code,2))
+    result = list()
+    for i in range(0,pow(2,4)):
+        if i in positions:
+            result.append(1)
+        else:
+            result.append(0)
+    return result
 
 
 def zero_codes_binary(code_patterns):
@@ -61,36 +60,79 @@ def s_codes_binary(zero_codes):
     return list(set(all_codes) - set(zero_codes))
 
 
+def generate_binary_constraint_lines(patterns):
+    lines = list()
+    for pattern in patterns:
+        lines.append(convert_binary_to_constraint_line(generate_codes(pattern)))
 
-def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx):
-    res = dict()
+    return lines
 
-    # init simplex data
-    B = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                  [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-                  [0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1],
-                  [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]])
 
-    zero_codes = zero_codes_binary(['00x1','110x','101x','01x0'])
+def setup_meta_data_binary():
+    meta_data = dict()
+    size_prob = pow(2, 4)
+    meta_data['size_prob'] = size_prob
+
+    lines = generate_binary_constraint_lines(['xxx1', 'xx1x', '01xx', '10xx', '11xx'])
+    meta_data['B'] = np.array([[1] * size_prob] + lines)
+
+    zero_codes = zero_codes_binary(['00x1', '110x', '101x', '01x0'])
     S_codes = s_codes_binary(zero_codes)
+    meta_data['S_codes'] = S_codes
     d_list = list()
-    for i in range(0,pow(2,4)):
+    for i in range(0, size_prob):
         format_str = '{0:04b}'
         if format_str.format(i) in S_codes:
             d_list.append(1)
         else:
             d_list.append(0)
-    d = np.array(d_list)#np.array([1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1])
+    meta_data['d'] = np.array(d_list)  # np.array([1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1])
 
-    F = np.diag(np.array([1]*pow(2, 4)))
-    c = np.array([0.0] * pow(2, 4))
+    meta_data['F'] = np.diag(np.array([1] * size_prob))
+    meta_data['c'] = np.array([0.0] * size_prob)
+
+    return meta_data
+
+
+meta_data_binary = setup_meta_data_binary()
+
+
+def approximateToCausalModel(obsConTable, ExpConTable, drawObsData, color):
+    Pxy, Pxny, Pnxy, Pnxny = get_probabilities(obsConTable)
+    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention(ExpConTable)
+    print("Pxy:" + str(Pxy) + " Pxny:" + str(Pxny) + " Pnxy:" + str(Pnxy) + " Pnxny:" + str(Pnxny))
+    if drawObsData:
+        plot_distribution(Pxy, Pxny, Pnxy, Pnxny, "black")
+    print("Py_x:" + str(Py_x) + " Py_nx:" + str(Py_nx) + " Pny_x:" + str(Pny_x) + " Pny_nx:" + str(Pny_nx))
+    modeldata = FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx)
+    print("approximated distribution")
+    if "Pxy" in modeldata:
+        print("Pxy:" + str(modeldata["Pxy"]) + " Pxny:" + str(modeldata["Pxny"]) + " Pnxy:" + str(
+            modeldata["Pnxy"]) + " Pnxny:" + str(modeldata["Pnxny"]))
+        plot_distribution(modeldata["Pxy"], modeldata["Pxny"], modeldata["Pnxy"], modeldata["Pnxny"], color)
+    return modeldata
+
+
+def marginalDistribution(P, fixed_code):
+    nb_x = count_char(fixed_code, 'x')
+    format_str = '{0:0xb}'.replace('x', str(nb_x))
+    return sum([P[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0,pow(2, nb_x))])
+
+
+def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx):
+    res = dict()
+
+    size_prob = meta_data_binary['size_prob']
+    B = meta_data_binary['B']
+    d = meta_data_binary['d']
+    F = meta_data_binary['F']
+    c = meta_data_binary['c']
+    S_codes = meta_data_binary['S_codes']
 
     b = np.array([1.0, Py_nx, Py_x, Pnxy, Pxny, Pxy])
 
     # create and run the solver
-    x = cp.Variable(shape=pow(2,4))
+    x = cp.Variable(shape=size_prob)
     obj = cp.Minimize(cp.sum(d * x))
     constraints = [B * x == b,
                    F * x >= c]
@@ -101,29 +143,7 @@ def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, 
     if x.value is None:
         return res
 
-    B = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                  [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-                  [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-                  [1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
-                  [0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1],
-                  [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]])
-
-    b = np.array([1.0, Pny_nx, Py_nx, Pny_x, Py_x, Pnxny, Pnxy, Pxny, Pxy])
-
-    xx = cp.Variable(shape=pow(2,4))
-    obj = cp.Minimize(cp.sum(d * xx))
-    constraints = [B * xx == b,
-                   F * xx >= c]
-    prob = cp.Problem(obj, constraints)
-    prob.solve(solver=cp.SCS, verbose=False)
-
-    #for v, w in zip(x.value,xx.value):
-    #    assert v == w
-
-    SimplexRes = xx.value
+    SimplexRes = x.value
 
     P = dict()
 

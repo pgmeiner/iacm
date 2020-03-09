@@ -104,7 +104,7 @@ if __name__ == '__main__':
     for file in os.listdir("./pairs"):
         if "_des" not in file:
             try:
-                #file = "pair0081.txt"
+                #file = "pair0010.txt"
                 data = read_data(file)
                 data = pd.DataFrame(RobustScaler().fit(data).transform(data))
                 data.columns = ['X', 'Y']

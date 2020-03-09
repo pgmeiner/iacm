@@ -9,7 +9,7 @@ def read_data(filename: str) -> pd.DataFrame:
     if data.shape[1] != 2:
         data = pd.read_csv('./pairs/' + filename, sep="\t", header=None)
         if data.shape[1] != 2:
-            data = pd.read_csv('./pairs/' + filename, sep="  ", header=None)
+            data = pd.read_csv('./pairs/' + filename, sep="  ", header=None, engine='python')
     if data.shape[1] == 3:
         data.columns = ["X", "Y", "Z"]
     else:
