@@ -49,6 +49,19 @@ def marginalDistribution(P, fixed_code):
     return sum([P[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0,pow(2, nb_x))])
 
 
+def zero_codes_binary(code_patterns):
+    format_str = '{0:01b}'
+    codes = [replace_char_by_char('x', code_pattern, format_str.format(nb)) for nb in range(0,pow(2,1)) for code_pattern in code_patterns]
+    return codes
+
+
+def s_codes_binary(zero_codes):
+    format_str = '{0:04b}'
+    all_codes = [replace_char_by_char('x', 'xxxx', format_str.format(nb)) for nb in range(0,pow(2,4))]
+    return list(set(all_codes) - set(zero_codes))
+
+
+
 def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx):
     res = dict()
 
@@ -60,30 +73,24 @@ def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, 
                   [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]])
 
-    d = np.array([1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1])
+    zero_codes = zero_codes_binary(['00x1','110x','101x','01x0'])
+    S_codes = s_codes_binary(zero_codes)
+    d_list = list()
+    for i in range(0,pow(2,4)):
+        format_str = '{0:04b}'
+        if format_str.format(i) in S_codes:
+            d_list.append(1)
+        else:
+            d_list.append(0)
+    d = np.array(d_list)#np.array([1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1])
 
-    F = np.array(
-        [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]])
+    F = np.diag(np.array([1]*pow(2, 4)))
+    c = np.array([0.0] * pow(2, 4))
+
     b = np.array([1.0, Py_nx, Py_x, Pnxy, Pxny, Pxy])
-    c = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
     # create and run the solver
-    x = cp.Variable(shape=16)
+    x = cp.Variable(shape=pow(2,4))
     obj = cp.Minimize(cp.sum(d * x))
     constraints = [B * x == b,
                    F * x >= c]
@@ -94,7 +101,29 @@ def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, 
     if x.value is None:
         return res
 
-    SimplexRes = x.value
+    B = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                  [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+                  [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+                  [1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
+                  [0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1],
+                  [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]])
+
+    b = np.array([1.0, Pny_nx, Py_nx, Pny_x, Py_x, Pnxny, Pnxy, Pxny, Pxy])
+
+    xx = cp.Variable(shape=pow(2,4))
+    obj = cp.Minimize(cp.sum(d * xx))
+    constraints = [B * xx == b,
+                   F * xx >= c]
+    prob = cp.Problem(obj, constraints)
+    prob.solve(solver=cp.SCS, verbose=False)
+
+    #for v, w in zip(x.value,xx.value):
+    #    assert v == w
+
+    SimplexRes = xx.value
 
     P = dict()
 
@@ -102,7 +131,7 @@ def FindBestApproximationToConsistentModel_binary(Pxy, Pxny, Pnxy, Pnxny, Py_x, 
         code = '{0:04b}'.format(i)
         P[code] = max(SimplexRes[i], 0.0)
 
-    S_codes = ['0000', '0010', '0111', '1000', '1110', '1111', '0101', '1001']
+    #S_codes = ['0000', '0010', '0111', '1000', '1110', '1111', '0101', '1001']
     S = sum([P[code] for code in S_codes])
     if S == 0:
         return res
