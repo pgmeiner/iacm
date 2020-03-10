@@ -109,7 +109,7 @@ if __name__ == '__main__':
                 data = pd.DataFrame(RobustScaler().fit(data).transform(data))
                 data.columns = ['X', 'Y']
                 ig = igci(data['X'], data['Y'], refMeasure=1, estimator=2)
-                res = iacm(data)
+                res = iacm(base=2, data=data)
 
                 content = open("./pairs/" + file.replace(".txt", "_des.txt"), "r").read().lower()
                 if (
