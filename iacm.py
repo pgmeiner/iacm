@@ -122,16 +122,29 @@ def get_constraint_data(base, list_of_distributions):
     return constraint_data
 
 
-def approximateToCausalModel(base,obsConTable, ExpConTable, drawObsData, color):
-    Pxy, Pxny, Pnxy, Pnxny = get_probabilities(obsConTable)
-    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention(ExpConTable)
-    print("Pxy:" + str(Pxy) + " Pxny:" + str(Pxny) + " Pnxy:" + str(Pnxy) + " Pnxny:" + str(Pnxny))
-    if drawObsData:
-        plot_distribution(Pxy, Pxny, Pnxy, Pnxny, "black")
-    print("Py_x:" + str(Py_x) + " Py_nx:" + str(Py_nx) + " Pny_x:" + str(Pny_x) + " Pny_nx:" + str(Pny_nx))
-    constraint_data = get_constraint_data(base=base, list_of_distributions=[Py_nx, Py_x, Pnxy, Pxny, Pxy])
+def get_constraint_distribution(P, P_i, base):
+    if base == 2:
+        return [P_i['0_1'], P_i['1_1'], P['01'], P['10'], P['11']]
+    elif base == 3:
+        return [P_i['2_1'], P_i['1_1'], P_i['0_1'], P['22'], P['21'], P['20'], P['12'], P['11'], P['10'],
+                P['02'], P['01']]
 
-    modeldata = FindBestApproximationToConsistentModel(base,constraint_data)
+
+def approximateToCausalModel(base,obsConTable, ExpConTable, drawObsData, color):
+    P = get_probabilities(obsConTable, base)
+    P_i = get_probabilities_intervention(ExpConTable, base)
+    constraint_distr = get_constraint_distribution(P, P_i, base)
+    for key, value in P.items():
+        print(key + ":" + str(value))
+    #print("Pxy:" + str(Pxy) + " Pxny:" + str(Pxny) + " Pnxy:" + str(Pnxy) + " Pnxny:" + str(Pnxny))
+    if drawObsData and base == 2:
+        plot_distribution(P['11'], P['10'], P['01'], P['00'], "black")
+    for key, value in P_i.items():
+        print(key + ":" + str(value))
+    #print("Py_x:" + str(Py_x) + " Py_nx:" + str(Py_nx) + " Pny_x:" + str(Pny_x) + " Pny_nx:" + str(Pny_nx))
+    constraint_data = get_constraint_data(base=base, list_of_distributions=constraint_distr)#Py_nx, Py_x, Pnxy, Pxny, Pxy])
+
+    modeldata = FindBestApproximationToConsistentModel(base, constraint_data)
     print("approximated distribution")
     if "Pxy" in modeldata:
         print("Pxy:" + str(modeldata["Pxy"]) + " Pxny:" + str(modeldata["Pxny"]) + " Pnxy:" + str(
@@ -197,11 +210,11 @@ def FindBestApproximationToConsistentModel(base, constraint_data):
 
 
 def testModelFromXtoY(base, obsX, obsY, intX, intY, drawObsData, color):
-    ExperimentContigenceTable = getContingencyTables(intX, intY)
-    ObservationContigenceTable = getContingencyTables(obsX, obsY)
+    ExperimentContigenceTable = getContingencyTables(intX, intY, base)
+    ObservationContigenceTable = getContingencyTables(obsX, obsY, base)
 
-    WriteContingencyTable(ObservationContigenceTable)
-    WriteContingencyTable(ExperimentContigenceTable)
+    WriteContingencyTable(ObservationContigenceTable, base)
+    WriteContingencyTable(ExperimentContigenceTable, base)
 
     return approximateToCausalModel(base, ObservationContigenceTable, ExperimentContigenceTable, drawObsData, color)
 
@@ -214,33 +227,35 @@ def localError(P_nom, P_denom, S):
     elif P_nom > 0:
         return 1000000.0
 
+
 def calcError(model):
     if "GlobalError" in model:
         return round(model["GlobalError"], 6)
     else:
         return 1000000.0
 
-def iacm(base, data: pd.DataFrame):
+
+def iacm(base, data: pd.DataFrame, params):
     data = pre_process_data(data)
     error_gap = dict()
     result = dict()
     for sort_col in ['X', 'Y']:
-        disc_data = discretize_data(data, sort_col)
-        cobsX, cobsY, cintX, cintY = cluster_data(disc_data, sort_col)
+        disc_data = discretize_data(data, params)
+        cobsX, cobsY, cintX, cintY = cluster_data(disc_data, sort_col, params)
         obsX = cobsX
         obsY = cobsY
         intX = cintX
         intY = cintY
         #obsX, obsY, intX, intY = generate_nonlinear_confounded_data(100)
-        obsTable = getContingencyTables(obsX, obsY)
-        intTable = getContingencyTables(intX, intY)
+        obsTable = getContingencyTables(obsX, obsY, base)
+        intTable = getContingencyTables(intX, intY, base)
         #if (min(obsTable[0][0]+obsTable[0][1], obsTable[1][0]+obsTable[1][1]) / \
         #    max(obsTable[0][0] + obsTable[0][1], obsTable[1][0] + obsTable[1][1]) < 0.002) or \
         #    (min(intTable[0][0] + intTable[0][1], intTable[1][0] + intTable[1][1]) / \
         #     max(intTable[0][0] + intTable[0][1], intTable[1][0] + intTable[1][1]) < 0.002) or \
-        if (max(get_probabilities(getContingencyTables(obsX, obsY))) > 0.7):
+        if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) > params['prob_threshold_cluster']):
             obsX, obsY, intX, intY = split_data(disc_data, sort_col)
-            if (max(get_probabilities(getContingencyTables(obsX, obsY))) <= 0.3):
+            if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) <= params['prob_threshold_no_cluster']):
                 obsX = cobsX
                 obsY = cobsY
                 intX = cintX

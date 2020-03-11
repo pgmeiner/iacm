@@ -95,11 +95,28 @@ def print_statisticts(statistics):
         print(value['not_correct_examples'])
 
 
+params = {2: {'bins': 4,
+              'x_shift': 1,
+              'y_shift': 1,
+              'nb_cluster': 3,
+              'prob_threshold_cluster': 0.7,
+              'prob_threshold_no_cluster': 0.3},
+          3: {'bins': 4,
+              'x_shift': 3,
+              'y_shift': 3,
+              'nb_cluster': 4,
+              'prob_threshold_cluster': 0.7,
+              'prob_threshold_no_cluster': 0.3
+              }
+          }
+
+
 if __name__ == '__main__':
     statistics = {'igci': dict(), 'iacm': dict()}
     for key, value in statistics.items():
         statistics[key] = {'correct':0, 'not_correct':0, 'no_decision': 0, 'not_correct_examples': []}
 
+    base = 3
     not_touched_files = []
     for file in os.listdir("./pairs"):
         if "_des" not in file:
@@ -109,7 +126,7 @@ if __name__ == '__main__':
                 data = pd.DataFrame(RobustScaler().fit(data).transform(data))
                 data.columns = ['X', 'Y']
                 ig = igci(data['X'], data['Y'], refMeasure=1, estimator=2)
-                res = iacm(base=2, data=data)
+                res = iacm(base=base, data=data, params=params[base])
 
                 content = open("./pairs/" + file.replace(".txt", "_des.txt"), "r").read().lower()
                 if (
