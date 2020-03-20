@@ -3,8 +3,9 @@ import numpy as np
 from math import log2
 import pandas as pd
 from data_preparation import get_probabilities, get_probabilities_intervention, WriteContingencyTable, \
-    getContingencyTables, pre_process_data, discretize_data, cluster_data, split_data
+    getContingencyTables, discretize_data, cluster_data, split_data
 from plot import plot_distribution
+from typing import List
 
 
 def count_char(str, char_to_count):
@@ -204,6 +205,7 @@ def FindBestApproximationToConsistentModel(base, constraint_data):
         else:
             NP[code] = 0
 
+    res['NP'] = NP
     res["GlobalError"] = log2(1 / S)
 
     return res
@@ -235,24 +237,47 @@ def calcError(model):
         return 1000000.0
 
 
-def iacm(base, data: pd.DataFrame, params):
-    data = pre_process_data(data)
-    error_gap = dict()
-    result = dict()
-    for sort_col in ['X', 'Y']:
+def preprocessing(data, sort_col, params, base):
+    if params['preprocess_method'] == 'discrete_split':
         disc_data = discretize_data(data, params)
-        cobsX, cobsY, cintX, cintY = cluster_data(disc_data, sort_col, params)
+        obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+    elif params['preprocess_method'] == 'split':
+        obsX, obsY, intX, intY = split_data(data, sort_col)
+    elif params['preprocess_method'] == 'cluster':
+        obsX, obsY, intX, intY = cluster_data(data, sort_col, params)
+    elif params['preprocess_method'] == 'discrete_cluster':
+        disc_data = discretize_data(data, params)
+        obsX, obsY, intX, intY = cluster_data(disc_data, sort_col, params)
+    elif params['preprocess_method'] == 'new_strategy':
+        disc_data = discretize_data(data, params)
+        obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+        mi_ds = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        #variation_disc_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
+        obsX, obsY, intX, intY = split_data(data, sort_col)
+        mi_s = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        #variation_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
+        disc_data = discretize_data(data, params)
+        obsX, obsY, intX, intY = cluster_data(disc_data, sort_col, params)
+        mi_dc = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        #variation_disc_cluster = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
+        #print("v_ds " + str(variation_disc_split))
+        #print("v_s " + str(variation_split))
+        #print("v_dc " + str(variation_disc_cluster))
+        if (mi_ds < min(mi_s,mi_dc)):
+            disc_data = discretize_data(data, params)
+            obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+        elif mi_s < min(mi_ds, mi_dc):
+            obsX, obsY, intX, intY = split_data(data, sort_col)
+        else:
+            disc_data = discretize_data(data, params)
+            obsX, obsY, intX, intY = cluster_data(disc_data, sort_col, params)
+    else:
+        disc_data = discretize_data(data, params)
+        cobsX, cobsY, cintX, cintY = cluster_data(data, sort_col, params)
         obsX = cobsX
         obsY = cobsY
         intX = cintX
         intY = cintY
-        #obsX, obsY, intX, intY = generate_nonlinear_confounded_data(100)
-        obsTable = getContingencyTables(obsX, obsY, base)
-        intTable = getContingencyTables(intX, intY, base)
-        #if (min(obsTable[0][0]+obsTable[0][1], obsTable[1][0]+obsTable[1][1]) / \
-        #    max(obsTable[0][0] + obsTable[0][1], obsTable[1][0] + obsTable[1][1]) < 0.002) or \
-        #    (min(intTable[0][0] + intTable[0][1], intTable[1][0] + intTable[1][1]) / \
-        #     max(intTable[0][0] + intTable[0][1], intTable[1][0] + intTable[1][1]) < 0.002) or \
         if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) > params['prob_threshold_cluster']):
             obsX, obsY, intX, intY = split_data(disc_data, sort_col)
             if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) <= params['prob_threshold_no_cluster']):
@@ -260,15 +285,83 @@ def iacm(base, data: pd.DataFrame, params):
                 obsY = cobsY
                 intX = cintX
                 intY = cintY
-        #if max(get_probabilities(getContingencyTables(obsX, obsY))) > 0.9:# and max(get_probabilities_intervention(getContingencyTables(intX, intY))) > 0.9:
-        #    obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+
+    return obsX, obsY, intX, intY
+
+
+def gini(array):
+    """Calculate the Gini coefficient of a numpy array."""
+    # based on bottom eq: http://www.statsdirect.com/help/content/image/stat0206_wmf.gif
+    # from: http://www.statsdirect.com/help/default.htm#nonparametric_methods/gini.htm
+    array = np.array(array).astype(float)
+    array = array.flatten() #all values are treated equally, arrays must be 1d
+    if np.amin(array) < 0:
+        array -= np.amin(array) #values cannot be negative
+    array += 0.0000001 #values cannot be 0
+    array = np.sort(array) #values must be sorted
+    index = np.arange(1,array.shape[0]+1) #index per array element
+    n = array.shape[0]#number of array elements
+    return ((np.sum((2 * index - n  - 1) * array)) / (n * np.sum(array))) #Gini coefficient
+
+
+def entropy(ls: List):
+    s = sum(ls)
+    if s > 3:
+        p = [e/s for e in ls]
+        return sum([-ep*log2(ep) for ep in p])
+    else:
+        return 0
+
+
+def KL_term(p,q):
+    if q == 0:
+        return 10000000
+    elif p == 0:
+        return 0
+    else:
+        return p*log2(p/q)
+
+
+def mutual_information(observation_contingence_table, base) -> float:
+    nb_max = base
+    X = [sum(observation_contingence_table[i]) for i in range(0, nb_max)]
+    Y = [sum([observation_contingence_table[i][j] for i in range(0, nb_max)]) for j in range(0, nb_max)]
+    x_sum = sum(X)
+    y_sum = sum(Y)
+    if x_sum > 0:
+        p_x = [e / x_sum for e in X]
+    else:
+        p_x = [0]*len(X)
+    if y_sum > 0:
+        p_y = [e / y_sum for e in Y]
+    else:
+        p_y = [0] * len(Y)
+
+    return sum([KL_term(e_p,e_q) for e_p, e_q in zip(p_x, p_y)])
+
+
+def calc_variations(observation_contingence_table, sort_col):
+    if 'X' in sort_col:
+        return min([entropy(observation_contingence_table[0]),
+            entropy(observation_contingence_table[1]),
+            entropy(observation_contingence_table[2])])
+    else:
+        return min([entropy([observation_contingence_table[0][0],observation_contingence_table[1][0],observation_contingence_table[2][0]]),
+                   entropy([observation_contingence_table[0][1],observation_contingence_table[1][1],observation_contingence_table[2][1]]),
+                   entropy([observation_contingence_table[0][2],observation_contingence_table[1][2],observation_contingence_table[2][2]])])
+
+
+def iacm(base, data: pd.DataFrame, params):
+    error_gap = dict()
+    result = dict()
+    for sort_col in ['X', 'Y']:
+        obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base)
         modelXtoY = testModelFromXtoY(base, obsX, obsY, intX, intY, True, "green")
         modelYtoX = testModelFromXtoY(base, obsY, obsX, intY, intX, False, "yellow")
         errorXtoY = calcError(modelXtoY)
         print("total Error X -> Y: " + str(errorXtoY))
         errorYtoX = calcError(modelYtoX)
         print("total Error Y -> X: " + str(errorYtoX))
-        res = ""
         if errorXtoY < errorYtoX:
             print("X -> Y")
             res = "X->Y"

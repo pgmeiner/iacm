@@ -188,23 +188,15 @@ def get_probabilities_intervention_ternary(contingenceTable):
         P_i['2_1'] = 0.0
         P_i['2_2'] = 0.0
     else:
-        P_i['1_0'] = contingenceTable[2][0] / float(two_col)
+        P_i['2_0'] = contingenceTable[2][0] / float(two_col)
         P_i['2_1'] = contingenceTable[2][1] / float(two_col)
         P_i['2_2'] = contingenceTable[2][2] / float(two_col)
 
     return P_i
 
 
-def pre_process_data(data):
-    m_x = data['X'].median()
-    m_y = data['Y'].median()
-    data['X'] = data['X'] - m_x
-    data['Y'] = data['Y'] - m_y
-    return data
-
-
 def discretize_data(data, params):
-    disc = pd.DataFrame(KBinsDiscretizer(n_bins=params['bins'], encode='ordinal', strategy='uniform').fit_transform(data))
+    disc = pd.DataFrame(KBinsDiscretizer(n_bins=params['bins'], encode='ordinal', strategy='uniform').fit_transform(data[['X', 'Y']]))
     disc.columns = ['X', 'Y']
     disc['X'] = disc['X'] - params['x_shift']
     disc['Y'] = disc['Y'] - params['y_shift']
@@ -212,7 +204,7 @@ def discretize_data(data, params):
 
 
 def cluster_data(data, col_to_prepare, params):
-    cluster = KMeans(n_clusters=params['nb_cluster']).fit(data)#np.array(data[col_to_prepare]).reshape(-1,1))
+    cluster = KMeans(n_clusters=params['nb_cluster']).fit(data[['X','Y']])#np.array(data[col_to_prepare]).reshape(-1,1))
     data['labels'] = cluster.labels_
     # calc variances in the cluster
     var_0 = max(data[data['labels'] == 0]['X'].var(), data[data['labels'] == 0]['Y'].var())
@@ -252,6 +244,7 @@ def split_data(data, col_to_prepare):
         if abs(sorted_data[col_to_prepare][i - 1] - sorted_data[col_to_prepare][i]) > max_diff:
             max_diff = abs(sorted_data[col_to_prepare][i - 1] - sorted_data[col_to_prepare][i])
             i_max = i
+    #i_max = 100
     return sorted_data['X'][0:i_max], sorted_data['Y'][0:i_max], sorted_data['X'][i_max:], sorted_data['Y'][i_max:]
     #i_max = int(0.4 * sorted_data.shape[0])
     #return pd.concat([data['X'][0:i_max], data['X'][(data.shape[0] - i_max):]],ignore_index=True), \
