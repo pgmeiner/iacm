@@ -5,7 +5,7 @@ import pandas as pd
 from data_preparation import get_probabilities, get_probabilities_intervention, WriteContingencyTable, \
     getContingencyTables, discretize_data, cluster_data, split_data
 from plot import plot_distribution
-from typing import List
+from typing import List, Dict
 
 
 def count_char(str, char_to_count):
@@ -77,12 +77,22 @@ def generate_constraint_lines(patterns, size_prob, base):
 
 pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '01xx', '10xx', '11xx'],
                     'zero_code_patterns': ['00x1', '110x', '101x', '01x0']},# '1001', '0101']},
-                3: {'constraint_patterns': ['xxxx1', 'xxx1x', 'xx1xx', '22xxx', '21xxx', '20xxx', '12xxx', '11xxx',
-                                            '10xxx', '02xxx', '01xxx'],
+                3: {'constraint_patterns': ['xxxx1', 'xxx1x', 'xx1xx', 'xxxx2', 'xxx2x', 'xx2xx',
+                                            '22xxx', '21xxx', '20xxx', '12xxx', '11xxx', '10xxx', '02xxx', '01xxx'],
                     'zero_code_patterns': ['001xx', '002xx', '010xx', '012xx', '020xx', '021xx',
                                            '10x1x', '10x2x', '11x0x', '11x2x', '12x0x', '12x1x',
                                            '20xx1', '20xx2', '21xx0', '21xx2', '22xx0', '22xx1']}
                 }
+
+# def generate_pattern_data(base: int) -> Dict:
+#     result_dict = dict()
+#     nb_x = count_char(pattern, 'x')
+#
+#     codes = [replace_char_by_char('x', pattern, base_repr(nb, base, nb_x)) for nb in range(0, pow(base, nb_x))]
+#
+#     result_dict[base]['constraint_patterns']
+#
+#     return result_dict
 
 
 def setup_meta_data(base, nb_variables):
@@ -128,8 +138,8 @@ def get_constraint_distribution(P, P_i, base):
     if base == 2:
         return [P_i['0_1'], P_i['1_1'], P['01'], P['10'], P['11']]
     elif base == 3:
-        return [P_i['2_1'], P_i['1_1'], P_i['0_1'], P['22'], P['21'], P['20'], P['12'], P['11'], P['10'],
-                P['02'], P['01']]
+        return [P_i['2_1'], P_i['1_1'], P_i['0_1'], P_i['2_2'], P_i['1_2'], P_i['0_2'],
+                P['22'], P['21'], P['20'], P['12'], P['11'], P['10'], P['02'], P['01']]
 
 
 def approximateToCausalModel(base,obsConTable, ExpConTable, drawObsData, color):
