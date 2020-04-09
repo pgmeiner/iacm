@@ -204,7 +204,8 @@ def discretize_data(data, params):
 
 
 def cluster_data(data, col_to_prepare, params):
-    cluster = KMeans(n_clusters=params['nb_cluster']).fit(data[['X','Y']])#np.array(data[col_to_prepare]).reshape(-1,1))
+    #cluster = KMeans(n_clusters=params['nb_cluster']).fit(data[['X','Y']])#np.array(data[col_to_prepare]).reshape(-1,1))
+    cluster = SpectralClustering(n_clusters=params['nb_cluster']).fit(data[['X', 'Y']])
     data['labels'] = cluster.labels_
     # calc variances in the cluster
     var_0 = max(data[data['labels'] == 0]['X'].var(), data[data['labels'] == 0]['Y'].var())

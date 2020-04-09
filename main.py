@@ -153,14 +153,15 @@ if __name__ == '__main__':
     all = set(iacm_discrete_split).intersection(set(iacm_split)).intersection(set(iacm_cluster)).intersection(set(iacm_discrete_cluster))
 
     max_samples = 100
-    simulated_data = True
-    base = 3
+    simulated_data = False
+    base = 2
     not_touched_files = []
+    total = 0
     for file in os.listdir("./pairs"):
         if "_des" not in file:
             try:
                 if simulated_data:
-                    obsX, obsY, intX, intY = generate_nonlinear_discrete_data(max_samples, 5)
+                    obsX, obsY, intX, intY = generate_nonlinear_discrete_data(max_samples, 77)
                     data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
                     ground_truth = "X->Y"
                 else:
@@ -177,7 +178,7 @@ if __name__ == '__main__':
                     statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + 1
                     statistics['igci']['not_correct_examples'].append(file)
 
-                for preprocess_method in ['discrete_split', 'split', 'cluster', 'discrete_cluster', 'alternativ' ,'new_strategy']:
+                for preprocess_method in ['cluster']: #['discrete_split', 'split', 'cluster', 'discrete_cluster', 'alternativ' ,'new_strategy']:
                     params[base]['preprocess_method'] = preprocess_method
                     print(preprocess_method)
                     res = iacm(base=base, data=data, params=params[base])
@@ -194,6 +195,9 @@ if __name__ == '__main__':
                         statistics['iacm_'+preprocess_method]['not_correct'] = statistics['iacm_'+preprocess_method]['not_correct'] + 1
                         statistics['iacm_'+preprocess_method]['not_correct_examples'].append(file)
                         print("not correct")
+
+                total = total + 1
+                print(str(statistics['iacm_cluster']['correct']) + 'from' + str(total))
 
             except Exception as e:
                 not_touched_files.append(file)

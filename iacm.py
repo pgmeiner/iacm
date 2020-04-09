@@ -76,12 +76,13 @@ def generate_constraint_lines(patterns, size_prob, base):
 
 
 pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '01xx', '10xx', '11xx'],
-                    'zero_code_patterns': ['00x1', '110x', '101x', '01x0']},
+                    'zero_code_patterns': ['00x1', '110x', '101x', '01x0']},# '1001', '0101']},
                 3: {'constraint_patterns': ['xxxx1', 'xxx1x', 'xx1xx', '22xxx', '21xxx', '20xxx', '12xxx', '11xxx',
                                             '10xxx', '02xxx', '01xxx'],
                     'zero_code_patterns': ['001xx', '002xx', '010xx', '012xx', '020xx', '021xx',
                                            '10x1x', '10x2x', '11x0x', '11x2x', '12x0x', '12x1x',
-                                           '20xx1', '20xx2', '21xx0', '21xx2', '22xx0', '22xx1']}}
+                                           '20xx1', '20xx2', '21xx0', '21xx2', '22xx0', '22xx1']}
+                }
 
 
 def setup_meta_data(base, nb_variables):
@@ -160,6 +161,20 @@ def marginalDistribution(P, fixed_code):
     return sum([P[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0,pow(2, nb_x))])
 
 
+def get_causal_prob_monotony(py, pxy, pnxny, py_x, py_nx):
+    PNS = py_x - py_nx
+    if pxy > 0:
+        PN = (py - py_nx) / pxy
+    else:
+        PN = 0
+    if pnxny > 0:
+        PS = (py_x - py) / pnxny
+    else:
+        PS = 0
+
+    return PN, PS, PNS
+
+
 def FindBestApproximationToConsistentModel(base, constraint_data):
     res = dict()
 
@@ -207,6 +222,17 @@ def FindBestApproximationToConsistentModel(base, constraint_data):
 
     res['NP'] = NP
     res["GlobalError"] = log2(1 / S)
+    if base == 2:
+        pxy = NP['1100'] + NP['1101'] + NP['1110'] + NP['1111']
+        pnxy = NP['0100'] + NP['0101'] + NP['0110'] + NP['0111']
+        pnxny = NP['0000'] + NP['0001'] + NP['0010'] + NP['0011']
+        py = pxy + pnxy
+        py_x = NP['0010'] + NP['0011'] + NP['0110'] + NP['0111'] + NP['1010'] + NP['1011'] + NP['1110'] + NP['1111']
+        py_nx = NP['0001'] + NP['0011'] + NP['0101'] + NP['0111'] + NP['1001'] + NP['1011'] + NP['1101'] + NP['1111']
+        PN, PS, PNS = get_causal_prob_monotony(py=py, pxy=pxy, pnxny=pnxny, py_x=py_x, py_nx=py_nx)
+        res['PN'] = PN
+        res['PS'] = PS
+        res['PNS'] = PNS
 
     return res
 
@@ -353,6 +379,7 @@ def calc_variations(observation_contingence_table, sort_col):
 
 def iacm(base, data: pd.DataFrame, params):
     error_gap = dict()
+    pn_error = dict()
     result = dict()
     for sort_col in ['X', 'Y']:
         obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base)
@@ -372,7 +399,13 @@ def iacm(base, data: pd.DataFrame, params):
             print("no decision")
             res = "no decision"
         result[sort_col] = res
+        #pn_error[sort_col] = min(errorYtoX, errorXtoY)
         error_gap[sort_col] = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
+
+    # if pn_error['X'] < pn_error['Y']:
+    #     return result['X']
+    # else:
+    #     return result['Y']
 
     if error_gap['X'] == 1 and error_gap['Y'] == 1:
         return "no decision"
@@ -380,6 +413,7 @@ def iacm(base, data: pd.DataFrame, params):
         return result['Y']
     else:
         return result['X']
+
     # for color in ['black', 'green', 'yellow', 'red']:
     #    ax.scatter(scatter_points[color]['x'], scatter_points[color]['y'], scatter_points[color]['z'], color=color, linewidth=1, s=2)
     # plt.show()
