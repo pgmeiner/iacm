@@ -29,6 +29,10 @@ def replace_char_by_char(char_to_replaced, str_to_be_replaced, to_be_inserted_st
     return final_str
 
 
+def insert(source_str: str, insert_str: str, pos: int) -> str:
+    return source_str[:pos-len(insert_str)]+insert_str+source_str[pos:]
+
+
 def base_repr(number, base, str_len):
     repr = np.base_repr(number, base)
     return '0'*(str_len-len(repr)) + repr
@@ -75,7 +79,7 @@ def generate_constraint_lines(patterns, size_prob, base):
     return lines
 
 
-pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '01xx', '10xx', '11xx'],
+pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '11xx', '10xx', '01xx'],
                     'zero_code_patterns': ['00x1', '110x', '101x', '01x0']},# '1001', '0101']},
                 3: {'constraint_patterns': ['xxxx1', 'xxx1x', 'xx1xx', 'xxxx2', 'xxx2x', 'xx2xx',
                                             '22xxx', '21xxx', '20xxx', '12xxx', '11xxx', '10xxx', '02xxx', '01xxx'],
@@ -84,15 +88,38 @@ pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '01xx', '10xx', '11x
                                            '20xx1', '20xx2', '21xx0', '21xx2', '22xx0', '22xx1']}
                 }
 
-# def generate_pattern_data(base: int) -> Dict:
-#     result_dict = dict()
-#     nb_x = count_char(pattern, 'x')
-#
-#     codes = [replace_char_by_char('x', pattern, base_repr(nb, base, nb_x)) for nb in range(0, pow(base, nb_x))]
-#
-#     result_dict[base]['constraint_patterns']
-#
-#     return result_dict
+
+def generate_pattern_data(base: int, nb_interventions: int) -> Dict:
+    result_dict = dict()
+    pattern_template = 'x'*2 + 'x'*nb_interventions
+    total_len = 2 + nb_interventions
+
+    # generate constraint_patterns
+    constraint_patterns = list()
+    for intervention in range(1,base):
+        for position in range(0, nb_interventions):
+            constraint_patterns.append(insert(pattern_template, str(intervention), total_len - position))
+
+    # iterate through the ranges of X and Y
+    for value_x in range(base-1, -1, -1):
+        for value_y in range(base-1, -1, -1):
+            if (value_x == 0) and (value_y == 0):
+                continue
+            constraint_patterns.append(insert(pattern_template, str(value_x) + str(value_y), 2))
+
+    # generate zero_code_patterns
+    zero_code_patterns = list()
+
+    for value_x in range(0, base):
+        for value_y in range(0, base,):
+            for intervention_y in range(0, base):
+                if value_y != intervention_y:
+                    zero_code_patterns.append(insert(insert(pattern_template, str(value_x) + str(value_y), 2), str(intervention_y), 3+value_x))
+
+    result_dict[base]['constraint_patterns'] = constraint_patterns
+    result_dict[base]['zero_code_patterns'] = zero_code_patterns
+
+    return result_dict
 
 
 def setup_meta_data(base, nb_variables):
@@ -136,8 +163,11 @@ def get_constraint_data(base, list_of_distributions):
 
 def get_constraint_distribution(P, P_i, base):
     if base == 2:
-        return [P_i['0_1'], P_i['1_1'], P['01'], P['10'], P['11']]
+        return [P_i['0_1'], P_i['1_1'], P['11'], P['10'], P['01']]
     elif base == 3:
+        return [P_i['2_1'], P_i['1_1'], P_i['0_1'], P_i['2_2'], P_i['1_2'], P_i['0_2'],
+                P['22'], P['21'], P['20'], P['12'], P['11'], P['10'], P['02'], P['01']]
+    elif base == 4:
         return [P_i['2_1'], P_i['1_1'], P_i['0_1'], P_i['2_2'], P_i['1_2'], P_i['0_2'],
                 P['22'], P['21'], P['20'], P['12'], P['11'], P['10'], P['02'], P['01']]
 

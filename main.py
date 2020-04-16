@@ -153,8 +153,8 @@ if __name__ == '__main__':
     all = set(iacm_discrete_split).intersection(set(iacm_split)).intersection(set(iacm_cluster)).intersection(set(iacm_discrete_cluster))
 
     max_samples = 100
-    simulated_data = True
-    base = 3
+    simulated_data = False
+    base = 2
     not_touched_files = []
     total = 0
     for file in os.listdir("./pairs"):
