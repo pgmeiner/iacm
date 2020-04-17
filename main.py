@@ -112,6 +112,13 @@ params = {2: {'bins': 4,
               'nb_cluster': 4,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
+              },
+          4: {'bins': 4,
+              'x_shift': 1,
+              'y_shift': 1,
+              'nb_cluster': 4,
+              'prob_threshold_cluster': 0.7,
+              'prob_threshold_no_cluster': 0.3
               }
           }
 
@@ -154,9 +161,10 @@ if __name__ == '__main__':
 
     max_samples = 100
     simulated_data = False
-    base = 2
+    base = 4
     not_touched_files = []
     total = 0
+    verbose = False
     for file in os.listdir("./pairs"):
         if "_des" not in file:
             try:
@@ -165,7 +173,7 @@ if __name__ == '__main__':
                     data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
                     ground_truth = "X->Y"
                 else:
-                    #file = "pair0092.txt"
+                    #file = "pair0095.txt"
                     data = read_data(file)
                     content = open("./pairs/" + file.replace(".txt", "_des.txt"), "r").read().lower()
                     ground_truth = get_ground_truth(content)
@@ -180,8 +188,8 @@ if __name__ == '__main__':
 
                 for preprocess_method in ['discrete_split', 'split', 'cluster', 'discrete_cluster', 'alternativ' ,'new_strategy']:
                     params[base]['preprocess_method'] = preprocess_method
-                    print(preprocess_method)
-                    res = iacm(base=base, data=data, params=params[base])
+                    if verbose: print(preprocess_method)
+                    res = iacm(base=base, data=data, params=params[base], verbose=verbose)
                     if ground_truth == res:
                         statistics['iacm_'+preprocess_method]['correct'] = statistics['iacm_'+preprocess_method]['correct'] + 1
                         statistics['iacm_'+preprocess_method]['correct_examples'].append(file)
@@ -197,7 +205,8 @@ if __name__ == '__main__':
                         print("not correct")
 
                 total = total + 1
-                print(str(statistics['iacm_cluster']['correct']) + 'from' + str(total))
+                if verbose: print(str(statistics['iacm_cluster']['correct']) + 'from' + str(total))
+                print(total)
 
             except Exception as e:
                 not_touched_files.append(file)

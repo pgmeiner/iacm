@@ -2,7 +2,7 @@ from typing import List
 from metrics import KL_Dist, entropy
 import numpy as np
 import cvxpy as cp
-from data_preparation import getContingencyTables, get_probabilities_intervention_binary, get_probabilities_binary
+from data_preparation import getContingencyTables, get_probabilities, get_probabilities_intervention
 
 def CalcIterativeProjectionToHypergraph(G: List[List[int]], n: int, P: List[float], MaxIter: int):
     # Berechnet Projektion von P auf Exponentialfamilie E_G induziert durch Hypergraph G
@@ -139,6 +139,6 @@ def max_entropy_with_marginal_constraints(pxy, pxny, pnxy, pnxny, py_x, py_nx, p
 def testIndpendentendModel(obsX, obsY, intX, intY, color):
     ExperimentContigenceTable = getContingencyTables(intX, intY)
     ObservationContigenceTable = getContingencyTables(obsX, obsY)
-    Pxy, Pxny, Pnxy, Pnxny = get_probabilities_binary(ObservationContigenceTable)
-    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention_binary(ExperimentContigenceTable)
+    Pxy, Pxny, Pnxy, Pnxny = get_probabilities(ObservationContigenceTable, base=2)
+    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention(ExperimentContigenceTable, base=2)
     return calc_distance_to_independent_graph(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx, color)

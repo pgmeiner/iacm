@@ -4,6 +4,7 @@ from MDLP import MDLP_Discretizer
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans, SpectralClustering, AgglomerativeClustering
 
+
 def read_data(filename: str) -> pd.DataFrame:
     data = pd.read_csv('./pairs/' + filename, sep=" ", header=None)
     if data.shape[1] != 2:
@@ -15,6 +16,47 @@ def read_data(filename: str) -> pd.DataFrame:
     else:
         data.columns = ["X", "Y"]
     return data
+
+
+def getContingencyTables(X, Y, base):
+    # ctable[x][y]
+    ctable = [[1] * base for _ in range(0, base)]
+    if X.empty or Y.empty:
+        return ctable
+    threshold_x = np.quantile(X, [i/base for i in range(1, base+1)])#[0, max(X) + 1]
+    threshold_y = np.quantile(Y, [i/base for i in range(1, base+1)])#[0, max(Y) + 1]
+    for x, y in zip(X,Y):
+        set = False
+        for i, thresh_x in enumerate(threshold_x):
+            if x <= thresh_x:
+                for j, thresh_y in enumerate(threshold_y):
+                    if y <= thresh_y:
+                        ctable[i][j] = ctable[i][j] + 1
+                        set = True
+                        break
+                if set:
+                    break
+
+    return ctable
+
+
+def getContingencyTables_binary(X, Y):
+    ctable = [[1, 1], [1, 1]]
+    threshold_x = 0#np.quantile(X, 0.85)
+    threshold_y = 0#np.quantile(Y, 0.85)
+    for x, y in zip(X, Y):
+        if x < threshold_x:
+            if y < threshold_y:
+                ctable[0][0] = ctable[0][0] + 1
+            else:
+                ctable[0][1] = ctable[0][1] + 1
+        else:
+            if y < threshold_y:
+                ctable[1][0] = ctable[1][0] + 1
+            else:
+                ctable[1][1] = ctable[1][1] + 1
+
+    return ctable
 
 
 def getContingencyTables_ternary(X, Y):
@@ -47,32 +89,6 @@ def getContingencyTables_ternary(X, Y):
     return ctable
 
 
-def getContingencyTables(X, Y, base):
-    if base == 2:
-        return getContingencyTables_binary(X, Y)
-    elif base == 3:
-        return getContingencyTables_ternary(X, Y)
-
-
-def getContingencyTables_binary(X, Y):
-    ctable = [[1, 1], [1, 1]]
-    threshold_x = 0#np.quantile(X, 0.85)
-    threshold_y = 0#np.quantile(Y, 0.85)
-    for x, y in zip(X, Y):
-        if x < threshold_x:
-            if y < threshold_y:
-                ctable[0][0] = ctable[0][0] + 1
-            else:
-                ctable[0][1] = ctable[0][1] + 1
-        else:
-            if y < threshold_y:
-                ctable[1][0] = ctable[1][0] + 1
-            else:
-                ctable[1][1] = ctable[1][1] + 1
-
-    return ctable
-
-
 def WriteContingencyTable(contingenceTable, base):
     if base == 2:
         WriteContingencyTable_binary(contingenceTable)
@@ -96,102 +112,26 @@ def WriteContingencyTable_ternary(contingenceTable):
 
 
 def get_probabilities(contingenceTable, base):
-    if base == 2:
-        return get_probabilities_binary(contingenceTable)
-    elif base == 3:
-        return get_probabilities_ternary(contingenceTable)
+    sum = np.sum([float(contingenceTable[i][j]) for i in range(0, base) for j in range(0, base)])
 
-
-def get_probabilities_binary(contingenceTable):
-    sum = float(contingenceTable[1][1] + contingenceTable[1][0] +
-                contingenceTable[0][1] + contingenceTable[0][0])
     P = dict()
-    P['00'] = contingenceTable[0][0] / sum
-    P['01'] = contingenceTable[0][1] / sum
-    P['10'] = contingenceTable[1][0] / sum
-    P['11'] = contingenceTable[1][1] / sum
-    return P
-
-
-def get_probabilities_ternary(contingenceTable):
-    sum = float(contingenceTable[0][0] + contingenceTable[0][1] + contingenceTable[0][2] +
-                contingenceTable[1][0] + contingenceTable[1][1] + contingenceTable[1][2] +
-                contingenceTable[2][0] + contingenceTable[2][1] + contingenceTable[2][2])
-    P = dict()
-    P['00'] = contingenceTable[0][0] / sum
-    P['01'] = contingenceTable[0][1] / sum
-    P['02'] = contingenceTable[0][2] / sum
-    P['10'] = contingenceTable[1][0] / sum
-    P['11'] = contingenceTable[1][1] / sum
-    P['12'] = contingenceTable[1][2] / sum
-    P['20'] = contingenceTable[2][0] / sum
-    P['21'] = contingenceTable[2][1] / sum
-    P['22'] = contingenceTable[2][2] / sum
+    for x_i in range(0, base):
+        for y_i in range(0, base):
+            index = str(x_i) + str(y_i)
+            P[index] = contingenceTable[x_i][y_i] / sum
     return P
 
 
 def get_probabilities_intervention(contingenceTable, base):
-    if base == 2:
-        return get_probabilities_intervention_binary(contingenceTable)
-    elif base == 3:
-        return get_probabilities_intervention_ternary(contingenceTable)
-
-
-def get_probabilities_intervention_binary(contingenceTable):
     P_i = dict()
-    if (contingenceTable[1][1] + contingenceTable[1][0]) == 0:
-        P_i['1_1'] = 0.0
-    else:
-        P_i['1_1'] = contingenceTable[1][1] / float(contingenceTable[1][1] + contingenceTable[1][0])
-    if (contingenceTable[0][1] + contingenceTable[0][0]) == 0:
-        P_i['0_1'] = 0.0
-    else:
-        P_i['0_1'] = contingenceTable[0][1] / float(contingenceTable[0][1] + contingenceTable[0][0])
-
-    if (contingenceTable[1][0] + contingenceTable[1][1]) == 0:
-        P_i['1_0'] = 0.0
-    else:
-        P_i['1_0'] = contingenceTable[1][0] / float(contingenceTable[1][0] + contingenceTable[1][1])
-    if (contingenceTable[0][1] + contingenceTable[0][0]) == 0:
-        P_i['0_0'] = 0.0
-    else:
-        P_i['0_0'] = contingenceTable[0][0] / float(contingenceTable[0][1] + contingenceTable[0][0])
-
-    return P_i
-
-
-def get_probabilities_intervention_ternary(contingenceTable):
-    P_i = dict()
-    zero_col = contingenceTable[0][0] + contingenceTable[0][1] + contingenceTable[0][2]
-    if zero_col == 0:
-        P_i['0_0'] = 0.0
-        P_i['0_1'] = 0.0
-        P_i['0_2'] = 0.0
-    else:
-        P_i['0_0'] = contingenceTable[0][0] / float(zero_col)
-        P_i['0_1'] = contingenceTable[0][1] / float(zero_col)
-        P_i['0_2'] = contingenceTable[0][2] / float(zero_col)
-
-    one_col = contingenceTable[1][0] + contingenceTable[1][1] + contingenceTable[1][2]
-    if one_col == 0:
-        P_i['1_0'] = 0.0
-        P_i['1_1'] = 0.0
-        P_i['1_2'] = 0.0
-    else:
-        P_i['1_0'] = contingenceTable[1][0] / float(one_col)
-        P_i['1_1'] = contingenceTable[1][1] / float(one_col)
-        P_i['1_2'] = contingenceTable[1][2] / float(one_col)
-
-    two_col = contingenceTable[2][0] + contingenceTable[2][1] + contingenceTable[2][2]
-    if two_col == 0:
-        P_i['2_0'] = 0.0
-        P_i['2_1'] = 0.0
-        P_i['2_2'] = 0.0
-    else:
-        P_i['2_0'] = contingenceTable[2][0] / float(two_col)
-        P_i['2_1'] = contingenceTable[2][1] / float(two_col)
-        P_i['2_2'] = contingenceTable[2][2] / float(two_col)
-
+    for x_i in range(0, base):
+        for y_i in range(0, base):
+            index = str(x_i) + '_' + str(y_i)
+            denom = np.sum([contingenceTable[x_i][j] for j in range(0, base)])
+            if denom == 0:
+                P_i[index] = 0.0
+            else:
+                P_i[index] = contingenceTable[x_i][y_i] / denom
     return P_i
 
 
@@ -235,6 +175,7 @@ def cluster_data(data, col_to_prepare, params):
          #     return data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y'], data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y']
          # else:
          #     return data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y'], data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y']
+
 
 def split_data(data, col_to_prepare):
     sorted_data = data.sort_values(by=[col_to_prepare]).reset_index()
