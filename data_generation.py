@@ -20,6 +20,9 @@ def generate_nonlinear_discrete_data(max_samples, base):
     return obsX.reshape(nb_samples,), obsY.reshape(nb_samples,), intX.reshape(nb_samples,), intY.reshape(nb_samples,)
 
 
+def generate_linear_discrete_data(max_samples, base):
+    pass
+
 def generate_linear_data(max_samples):
     obsX = np.random.normal(0, 1, max_samples)
     obsY = 5 * obsX - 1 * np.random.normal(0, 1, max_samples)

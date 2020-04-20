@@ -5,7 +5,7 @@ from iacm import calcError, testModelFromXtoY, iacm, preprocessing, calc_variati
 from igci import igci
 from data_preparation import read_data, getContingencyTables
 from plot import plot_distributions
-from data_generation import generate_nonlinear_data, generate_nonlinear_discrete_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data
+from data_generation import generate_nonlinear_data, generate_nonlinear_discrete_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data, generate_linear_discrete_data
 from hypergraph_projection import testIndpendentendModel
 from sklearn.preprocessing import StandardScaler, RobustScaler
 
@@ -100,23 +100,23 @@ def print_statisticts(statistics):
         print(value['not_correct_examples'])
 
 
-params = {2: {'bins': 4,
+params = {2: {'bins': 2,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 4,
+              'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3},
           3: {'bins': 4,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 4,
+              'nb_cluster': 3,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               },
-          4: {'bins': 5,
+          4: {'bins': 4,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 5,
+              'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               }
@@ -130,79 +130,106 @@ def get_ground_truth(content):
         return "Y->X"
 
 
-if __name__ == '__main__':
-    statistics = {'igci': dict(), 'iacm_discrete_split': dict(), 'iacm_split': dict(), 'iacm_cluster': dict(),
-                  'iacm_discrete_cluster': dict(), 'iacm_alternativ': dict(), 'iacm_theoretic_coverage': dict(), 'iacm_new_strategy': dict()}
+def get_stat_entry(data):
+    total_number = data['correct'] + data['not_correct'] + data['no_decision']
+    return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(data['correct']) + "/" + str(total_number) + ")"
+
+def print_for_evaluation(statistics, size_alphabet, params, base):
+    print(str(size_alphabet) + ";" +
+          get_stat_entry(statistics['igci']) + ";" +
+          get_stat_entry(statistics['iacm_none']) + ";" +
+          get_stat_entry(statistics['iacm_split_discrete']) + ";" +
+          get_stat_entry(statistics['iacm_discrete_split']) + ";" +
+          get_stat_entry(statistics['iacm_discrete_cluster']) + ";" +
+          get_stat_entry(statistics['iacm_cluster_discrete']) + ";" +
+          get_stat_entry(statistics['iacm_new_strategy']) + ";" +
+          get_stat_entry(statistics['iacm_theoretic_coverage']) + ";" +
+          str(params['bins']) + ";" + str(params['nb_cluster']) + ";" +
+          str(base))
+
+
+def run_simulations(structure, max_samples, size_alphabet, nr_simulations):
+    for i in range(0, nr_simulations):
+        if structure == 'nonlinear_discrete':
+            obsX, obsY, intX, intY = generate_nonlinear_discrete_data(max_samples, size_alphabet)
+        elif structure == 'linear_discrete':
+            obsX, obsY, intX, intY = generate_linear_discrete_data(max_samples, size_alphabet)
+        else:
+            continue
+
+        data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
+        filename = "pair" + str(i) + ".csv"
+        data.to_csv(f'simulations/{structure}/{size_alphabet}/{filename}', sep=" ", header=False, index=False)
+
+
+def run_inference(simulated_data, structure, size_alphabet, base):
+    statistics = {'igci': dict(), 'iacm_none': dict(), 'iacm_discrete_split': dict(), 'iacm_split_discrete': dict(),
+                  'iacm_cluster_discrete': dict(),
+                  'iacm_discrete_cluster': dict(), 'iacm_alternativ': dict(), 'iacm_theoretic_coverage': dict(),
+                  'iacm_new_strategy': dict()}
     for key, value in statistics.items():
-        statistics[key] = {'correct':0, 'not_correct':0, 'no_decision': 0, 'not_correct_examples': [], 'correct_examples': []}
+        statistics[key] = {'correct': 0, 'not_correct': 0, 'no_decision': 0, 'not_correct_examples': [],
+                           'correct_examples': []}
 
-    iacm_discrete_split = ['pair0057.txt', 'pair0043.txt', 'pair0056.txt', 'pair0083.txt', 'pair0097.txt', 'pair0108.txt', 'pair0069.txt',
-     'pair0082.txt', 'pair0045.txt', 'pair0078.txt', 'pair0091.txt', 'pair0084.txt', 'pair0009.txt', 'pair0021.txt',
-     'pair0036.txt', 'pair0022.txt', 'pair0019.txt', 'pair0031.txt', 'pair0025.txt', 'pair0024.txt', 'pair0018.txt',
-     'pair0015.txt', 'pair0029.txt', 'pair0014.txt', 'pair0013.txt', 'pair0006.txt', 'pair0038.txt', 'pair0010.txt',
-     'pair0089.txt', 'pair0076.txt', 'pair0062.txt', 'pair0102.txt', 'pair0088.txt', 'pair0060.txt', 'pair0059.txt',
-     'pair0072.txt']
-    iacm_split = ['pair0094.txt', 'pair0043.txt', 'pair0056.txt', 'pair0083.txt', 'pair0097.txt', 'pair0040.txt', 'pair0108.txt',
-     'pair0092.txt', 'pair0079.txt', 'pair0045.txt', 'pair0051.txt', 'pair0050.txt', 'pair0091.txt', 'pair0046.txt',
-     'pair0090.txt', 'pair0009.txt', 'pair0021.txt', 'pair0036.txt', 'pair0026.txt', 'pair0027.txt', 'pair0019.txt',
-     'pair0031.txt', 'pair0030.txt', 'pair0015.txt', 'pair0029.txt', 'pair0007.txt', 'pair0038.txt', 'pair0005.txt',
-     'pair0089.txt', 'pair0062.txt', 'pair0061.txt', 'pair0101.txt', 'pair0070.txt', 'pair0059.txt', 'pair0098.txt']
-    iacm_cluster = ['pair0094.txt', 'pair0057.txt', 'pair0042.txt', 'pair0083.txt', 'pair0097.txt', 'pair0040.txt', 'pair0108.txt',
-     'pair0041.txt', 'pair0045.txt', 'pair0051.txt', 'pair0050.txt', 'pair0078.txt', 'pair0047.txt', 'pair0084.txt',
-     'pair0090.txt', 'pair0009.txt', 'pair0036.txt', 'pair0026.txt', 'pair0027.txt', 'pair0030.txt', 'pair0029.txt',
-     'pair0028.txt', 'pair0014.txt', 'pair0006.txt', 'pair0089.txt', 'pair0062.txt', 'pair0102.txt', 'pair0103.txt',
-     'pair0063.txt', 'pair0088.txt', 'pair0061.txt', 'pair0058.txt']
-    iacm_discrete_cluster = ['pair0057.txt', 'pair0042.txt', 'pair0056.txt', 'pair0081.txt', 'pair0069.txt', 'pair0082.txt', 'pair0079.txt',
-     'pair0045.txt', 'pair0051.txt', 'pair0050.txt', 'pair0091.txt', 'pair0047.txt', 'pair0084.txt', 'pair0036.txt',
-     'pair0026.txt', 'pair0027.txt', 'pair0031.txt', 'pair0018.txt', 'pair0015.txt', 'pair0029.txt', 'pair0028.txt',
-     'pair0016.txt', 'pair0006.txt', 'pair0010.txt', 'pair0089.txt', 'pair0076.txt', 'pair0103.txt', 'pair0049.txt',
-     'pair0101.txt', 'pair0048.txt', 'pair0060.txt', 'pair0058.txt', 'pair0059.txt']
-    all = set(iacm_discrete_split).intersection(set(iacm_split)).intersection(set(iacm_cluster)).intersection(set(iacm_discrete_cluster))
-
-    max_samples = 100
-    simulated_data = False
-    base = 2
     not_touched_files = []
     total = 0
     verbose = False
-    for file in os.listdir("./pairs"):
+    if simulated_data == False:
+        directory = "./pairs"
+    else:
+        directory = f'./simulations/{structure}/{size_alphabet}'
+    for file in os.listdir(directory):
         if "_des" not in file:
             try:
+                some_method_succeeded = False
+                # file = "pair0003.txt"
+                data = read_data(directory, file)
                 if simulated_data:
-                    obsX, obsY, intX, intY = generate_nonlinear_discrete_data(max_samples, 7)
-                    data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
                     ground_truth = "X->Y"
                 else:
-                    #file = "pair0095.txt"
-                    data = read_data(file)
                     content = open("./pairs/" + file.replace(".txt", "_des.txt"), "r").read().lower()
                     ground_truth = get_ground_truth(content)
                 data = pd.DataFrame(RobustScaler().fit(data).transform(data))
                 data.columns = ['X', 'Y']
                 ig = igci(data['X'], data['Y'], refMeasure=1, estimator=2)
+                if ig == 0:
+                    ig = igci(data['X'], data['Y'], refMeasure=2, estimator=2)
                 if (ground_truth in 'X->Y' and ig < 0) or (ground_truth in 'Y->X' and ig > 0):
                     statistics['igci']['correct'] = statistics['igci']['correct'] + 1
                 else:
                     statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + 1
                     statistics['igci']['not_correct_examples'].append(file)
 
-                for preprocess_method in ['discrete_split', 'split_discrete', 'discrete_cluster', 'cluster_discrete', 'alternativ' ,'new_strategy']:
+                for preprocess_method in ['none', 'discrete_split', 'split_discrete', 'discrete_cluster', 'cluster_discrete',
+                                          'alternativ', 'new_strategy']:
                     params[base]['preprocess_method'] = preprocess_method
                     if verbose: print(preprocess_method)
                     res = iacm(base=base, data=data, params=params[base], verbose=verbose)
                     if ground_truth == res:
-                        statistics['iacm_'+preprocess_method]['correct'] = statistics['iacm_'+preprocess_method]['correct'] + 1
-                        statistics['iacm_'+preprocess_method]['correct_examples'].append(file)
-                        statistics['iacm_theoretic_coverage']['correct_examples'].append(file)
-                        print("correct")
+                        statistics['iacm_' + preprocess_method]['correct'] = statistics['iacm_' + preprocess_method][
+                                                                                 'correct'] + 1
+                        statistics['iacm_' + preprocess_method]['correct_examples'].append(file)
+                        if not some_method_succeeded:
+                            statistics['iacm_theoretic_coverage']['correct'] = statistics['iacm_theoretic_coverage'][
+                                                                                   'correct'] + 1
+                            statistics['iacm_theoretic_coverage']['correct_examples'].append(file)
+                            some_method_succeeded = True
+                        total_method = statistics['iacm_' + preprocess_method]['correct'] + statistics['iacm_' + preprocess_method]['not_correct'] + statistics['iacm_' + preprocess_method]['no_decision']
+                        print("correct: " + str(statistics['iacm_' + preprocess_method]['correct'] / total_method))
                     elif "no decision" in res:
-                        statistics['iacm_'+preprocess_method]['no_decision'] = statistics['iacm_'+preprocess_method]['no_decision'] + 1
+                        statistics['iacm_' + preprocess_method]['no_decision'] = \
+                        statistics['iacm_' + preprocess_method]['no_decision'] + 1
                         statistics['iacm_theoretic_coverage']['not_correct_examples'].append(file)
                         print("no decision")
                     else:
-                        statistics['iacm_'+preprocess_method]['not_correct'] = statistics['iacm_'+preprocess_method]['not_correct'] + 1
-                        statistics['iacm_'+preprocess_method]['not_correct_examples'].append(file)
+                        statistics['iacm_' + preprocess_method]['not_correct'] = \
+                        statistics['iacm_' + preprocess_method]['not_correct'] + 1
+                        statistics['iacm_' + preprocess_method]['not_correct_examples'].append(file)
                         print("not correct")
+                if not some_method_succeeded:
+                    statistics['iacm_theoretic_coverage']['not_correct_examples'].append(file)
+                    statistics['iacm_theoretic_coverage']['not_correct'] = statistics['iacm_theoretic_coverage'][
+                                                                               'not_correct'] + 1
 
                 total = total + 1
                 if verbose: print(str(statistics['iacm_cluster']['correct']) + 'from' + str(total))
@@ -214,3 +241,15 @@ if __name__ == '__main__':
     print_statisticts(statistics)
     print("not touched files")
     print(not_touched_files)
+
+    # print out for evaluation
+    print_for_evaluation(statistics, size_alphabet, params[base], base)
+
+
+if __name__ == '__main__':
+    structure = 'nonlinear_discrete'
+    nr_simulations = 100
+    max_samples = 100
+    size_alphabet = 3
+    #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
+    run_inference(simulated_data=True, structure=structure, size_alphabet=size_alphabet, base=3)

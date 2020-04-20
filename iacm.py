@@ -3,7 +3,7 @@ import numpy as np
 from math import log2
 import pandas as pd
 from data_preparation import get_probabilities, get_probabilities_intervention, WriteContingencyTable, \
-    getContingencyTables, discretize_data, cluster_data, split_data
+    getContingencyTables, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels
 from meta_data import setup_meta_data, base_repr
 from plot import plot_distribution
 from typing import List
@@ -176,29 +176,35 @@ def calcError(model):
 
 
 def preprocessing(data, sort_col, params, base):
-    if params['preprocess_method'] == 'discrete_split':
+    if params['preprocess_method'] == 'none':
+        split_idx = int(data.shape[0] / 2)
+        obsX, obsY, intX, intY = split_data_at_index(data, split_idx)
+    elif params['preprocess_method'] == 'discrete_split':
         disc_data = discretize_data(data, params)
-        obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+        obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
     elif params['preprocess_method'] == 'split_discrete':
-        obsX, obsY, intX, intY = split_data(data, sort_col)
-        dataX = discretize_data(pd.concat([obsX, intX]), params)
-        dataY = discretize_data(pd.concat([obsY, intY]), params)
-
+        obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
+        dataXY = pd.concat([pd.concat([obsX, intX]), pd.concat([obsY, intY])], axis=1)
+        disc_data = discretize_data(dataXY, params)
+        obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max)
     elif params['preprocess_method'] == 'cluster_discrete':
-        obsX, obsY, intX, intY = cluster_data(data, sort_col, params)
+        (obsX, obsY, intX, intY), clustered_data = cluster_data(data, sort_col, params)
+        disc_data = discretize_data(clustered_data, params)
+        disc_data['labels'] = clustered_data['labels']
+        obsX, obsY, intX, intY = split_at_clustered_labels(disc_data,sort_col,params)
     elif params['preprocess_method'] == 'discrete_cluster':
         disc_data = discretize_data(data, params)
-        obsX, obsY, intX, intY = cluster_data(disc_data, sort_col, params)
+        (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
     elif params['preprocess_method'] == 'new_strategy':
         disc_data = discretize_data(data, params)
-        obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+        obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
         mi_ds = mutual_information(getContingencyTables(obsX, obsY, base), base)
         #variation_disc_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
-        obsX, obsY, intX, intY = split_data(data, sort_col)
+        obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
         mi_s = mutual_information(getContingencyTables(obsX, obsY, base), base)
         #variation_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         disc_data = discretize_data(data, params)
-        obsX, obsY, intX, intY = cluster_data(disc_data, sort_col, params)
+        (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
         mi_dc = mutual_information(getContingencyTables(obsX, obsY, base), base)
         #variation_disc_cluster = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         #print("v_ds " + str(variation_disc_split))
@@ -206,21 +212,21 @@ def preprocessing(data, sort_col, params, base):
         #print("v_dc " + str(variation_disc_cluster))
         if (mi_ds < min(mi_s,mi_dc)):
             disc_data = discretize_data(data, params)
-            obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+            obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
         elif mi_s < min(mi_ds, mi_dc):
-            obsX, obsY, intX, intY = split_data(data, sort_col)
+            obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
         else:
             disc_data = discretize_data(data, params)
-            obsX, obsY, intX, intY = cluster_data(disc_data, sort_col, params)
+            (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
     else:
         disc_data = discretize_data(data, params)
-        cobsX, cobsY, cintX, cintY = cluster_data(data, sort_col, params)
+        (cobsX, cobsY, cintX, cintY), clustered_data = cluster_data(data, sort_col, params)
         obsX = cobsX
         obsY = cobsY
         intX = cintX
         intY = cintY
         if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) > params['prob_threshold_cluster']):
-            obsX, obsY, intX, intY = split_data(disc_data, sort_col)
+            obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
             if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) <= params['prob_threshold_no_cluster']):
                 obsX = cobsX
                 obsY = cobsY

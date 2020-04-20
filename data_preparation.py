@@ -5,12 +5,12 @@ from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans, SpectralClustering, AgglomerativeClustering
 
 
-def read_data(filename: str) -> pd.DataFrame:
-    data = pd.read_csv('./pairs/' + filename, sep=" ", header=None)
+def read_data(directory, filename: str) -> pd.DataFrame:
+    data = pd.read_csv(directory + '/' + filename, sep=" ", header=None)
     if data.shape[1] != 2:
-        data = pd.read_csv('./pairs/' + filename, sep="\t", header=None)
+        data = pd.read_csv(directory + filename, sep="\t", header=None)
         if data.shape[1] != 2:
-            data = pd.read_csv('./pairs/' + filename, sep="  ", header=None, engine='python')
+            data = pd.read_csv(directory + filename, sep="  ", header=None, engine='python')
     if data.shape[1] == 3:
         data.columns = ["X", "Y", "Z"]
     else:
@@ -147,6 +147,10 @@ def cluster_data(data, col_to_prepare, params):
     cluster = KMeans(n_clusters=params['nb_cluster']).fit(data[['X','Y']])#np.array(data[col_to_prepare]).reshape(-1,1))
     #cluster = SpectralClustering(n_clusters=params['nb_cluster']).fit(data[['X', 'Y']])
     data['labels'] = cluster.labels_
+    return split_at_clustered_labels(data, col_to_prepare, params), data
+
+
+def split_at_clustered_labels(data, col_to_prepare, params):
     # calc variances in the cluster
     var = dict()
     for i_cluster in range(params['nb_cluster']):
@@ -154,14 +158,14 @@ def cluster_data(data, col_to_prepare, params):
 
     if 'X' in col_to_prepare:
         for i_cluster in range(params['nb_cluster']):
-            if var[i_cluster] < min([val for i, val in var.items() if i is not i_cluster]):
+            if var[i_cluster] <= min([val for i, val in var.items() if i is not i_cluster]):
                 return data[data['labels'] == i_cluster]['X'], \
                        data[data['labels'] == i_cluster]['Y'], \
                        data[(data['labels'] != i_cluster)]['X'], \
                        data[(data['labels'] != i_cluster)]['Y']
     else:
         for i_cluster in range(params['nb_cluster']):
-            if var[i_cluster] < min([val for i, val in var.items() if i is not i_cluster]):
+            if var[i_cluster] <= min([val for i, val in var.items() if i is not i_cluster]):
                 return data[(data['labels'] != i_cluster)]['X'], \
                        data[(data['labels'] != i_cluster)]['Y'], \
                        data[data['labels'] == i_cluster]['X'], \
@@ -170,7 +174,6 @@ def cluster_data(data, col_to_prepare, params):
          #     return data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y'], data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y']
          # else:
          #     return data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y'], data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y']
-
 
 def split_data(data, col_to_prepare):
     sorted_data = data.sort_values(by=[col_to_prepare]).reset_index()
@@ -182,9 +185,12 @@ def split_data(data, col_to_prepare):
             max_diff = abs(sorted_data[col_to_prepare][i - 1] - sorted_data[col_to_prepare][i])
             i_max = i
     #i_max = 100
-    return sorted_data['X'][0:i_max], sorted_data['Y'][0:i_max], sorted_data['X'][i_max:], sorted_data['Y'][i_max:]
+    return sorted_data['X'][0:i_max], sorted_data['Y'][0:i_max], sorted_data['X'][i_max:], sorted_data['Y'][i_max:], i_max
     #i_max = int(0.4 * sorted_data.shape[0])
     #return pd.concat([data['X'][0:i_max], data['X'][(data.shape[0] - i_max):]],ignore_index=True), \
     #       pd.concat([data['Y'][0:i_max], data['Y'][(data.shape[0] - i_max):]], ignore_index=True), \
     #       data['X'][i_max:(data.shape[0] - i_max)], \
     #       data['Y'][i_max:(data.shape[0] - i_max)]
+
+def split_data_at_index(data, idx):
+    return data['X'][0:idx], data['Y'][0:idx], data['X'][idx:], data['Y'][idx:]
