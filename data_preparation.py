@@ -148,29 +148,24 @@ def cluster_data(data, col_to_prepare, params):
     #cluster = SpectralClustering(n_clusters=params['nb_cluster']).fit(data[['X', 'Y']])
     data['labels'] = cluster.labels_
     # calc variances in the cluster
-    var_0 = max(data[data['labels'] == 0]['X'].var(), data[data['labels'] == 0]['Y'].var())
-    var_1 = max(data[data['labels'] == 1]['X'].var(), data[data['labels'] == 1]['Y'].var())
-    var_2 = max(data[data['labels'] == 2]['X'].var(), data[data['labels'] == 2]['Y'].var())
-    if 'X' in col_to_prepare:# or 'Y' in col_to_prepare:
-        if var_0 < min(var_1, var_2):
-            return data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y'], data[(data['labels'] == 1) | (data['labels'] == 2)]['X'], data[(data['labels'] == 1) | (data['labels'] == 2)]['Y']
-        elif var_1 < min(var_0, var_2):
-            return data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y'], data[(data['labels'] == 0) | (data['labels'] == 2)]['X'], data[(data['labels'] == 0) | (data['labels'] == 2)]['Y']
-        elif var_2 < min(var_0, var_1):
-            return data[data['labels'] == 2]['X'], data[data['labels'] == 2]['Y'], data[(data['labels'] == 0) | (data['labels'] == 1)]['X'], data[(data['labels'] == 0) | (data['labels'] == 1)]['Y']
+    var = dict()
+    for i_cluster in range(params['nb_cluster']):
+        var[i_cluster] = max(data[data['labels'] == i_cluster]['X'].var(), data[data['labels'] == i_cluster]['Y'].var())
+
+    if 'X' in col_to_prepare:
+        for i_cluster in range(params['nb_cluster']):
+            if var[i_cluster] < min([val for i, val in var.items() if i is not i_cluster]):
+                return data[data['labels'] == i_cluster]['X'], \
+                       data[data['labels'] == i_cluster]['Y'], \
+                       data[(data['labels'] != i_cluster)]['X'], \
+                       data[(data['labels'] != i_cluster)]['Y']
     else:
-        if var_0 < min(var_1, var_2):
-            return data[(data['labels'] == 1) | (data['labels'] == 2)]['X'], \
-                   data[(data['labels'] == 1) | (data['labels'] == 2)]['Y'], \
-                   data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y']
-        elif var_1 < min(var_0, var_2):
-            return data[(data['labels'] == 0) | (data['labels'] == 2)]['X'], \
-                   data[(data['labels'] == 0) | (data['labels'] == 2)]['Y'], \
-                   data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y']
-        elif var_2 < min(var_0, var_1):
-            return data[(data['labels'] == 0) | (data['labels'] == 1)]['X'], \
-                   data[(data['labels'] == 0) | (data['labels'] == 1)]['Y'], \
-                   data[data['labels'] == 2]['X'], data[data['labels'] == 2]['Y']
+        for i_cluster in range(params['nb_cluster']):
+            if var[i_cluster] < min([val for i, val in var.items() if i is not i_cluster]):
+                return data[(data['labels'] != i_cluster)]['X'], \
+                       data[(data['labels'] != i_cluster)]['Y'], \
+                       data[data['labels'] == i_cluster]['X'], \
+                       data[data['labels'] == i_cluster]['Y']
          # if var_0 > var_1:
          #     return data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y'], data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y']
          # else:

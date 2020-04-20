@@ -179,9 +179,12 @@ def preprocessing(data, sort_col, params, base):
     if params['preprocess_method'] == 'discrete_split':
         disc_data = discretize_data(data, params)
         obsX, obsY, intX, intY = split_data(disc_data, sort_col)
-    elif params['preprocess_method'] == 'split':
+    elif params['preprocess_method'] == 'split_discrete':
         obsX, obsY, intX, intY = split_data(data, sort_col)
-    elif params['preprocess_method'] == 'cluster':
+        dataX = discretize_data(pd.concat([obsX, intX]), params)
+        dataY = discretize_data(pd.concat([obsY, intY]), params)
+
+    elif params['preprocess_method'] == 'cluster_discrete':
         obsX, obsY, intX, intY = cluster_data(data, sort_col, params)
     elif params['preprocess_method'] == 'discrete_cluster':
         disc_data = discretize_data(data, params)

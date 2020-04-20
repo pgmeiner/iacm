@@ -101,22 +101,22 @@ def print_statisticts(statistics):
 
 
 params = {2: {'bins': 4,
-              'x_shift': 1,
-              'y_shift': 1,
-              'nb_cluster': 3,
+              'x_shift': 0,
+              'y_shift': 0,
+              'nb_cluster': 4,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3},
           3: {'bins': 4,
-              'x_shift': 1,
-              'y_shift': 1,
+              'x_shift': 0,
+              'y_shift': 0,
               'nb_cluster': 4,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               },
-          4: {'bins': 4,
-              'x_shift': 1,
-              'y_shift': 1,
-              'nb_cluster': 4,
+          4: {'bins': 5,
+              'x_shift': 0,
+              'y_shift': 0,
+              'nb_cluster': 5,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               }
@@ -161,7 +161,7 @@ if __name__ == '__main__':
 
     max_samples = 100
     simulated_data = False
-    base = 4
+    base = 2
     not_touched_files = []
     total = 0
     verbose = False
@@ -186,7 +186,7 @@ if __name__ == '__main__':
                     statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + 1
                     statistics['igci']['not_correct_examples'].append(file)
 
-                for preprocess_method in ['discrete_split', 'split', 'cluster', 'discrete_cluster', 'alternativ' ,'new_strategy']:
+                for preprocess_method in ['discrete_split', 'split_discrete', 'discrete_cluster', 'cluster_discrete', 'alternativ' ,'new_strategy']:
                     params[base]['preprocess_method'] = preprocess_method
                     if verbose: print(preprocess_method)
                     res = iacm(base=base, data=data, params=params[base], verbose=verbose)
