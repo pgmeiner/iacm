@@ -100,23 +100,23 @@ def print_statisticts(statistics):
         print(value['not_correct_examples'])
 
 
-params = {2: {'bins': 2,
+params = {2: {'bins': 50,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 2,
+              'nb_cluster': 4,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3},
-          3: {'bins': 4,
+          3: {'bins': 11,
               'x_shift': 0,
               'y_shift': 0,
               'nb_cluster': 3,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               },
-          4: {'bins': 4,
+          4: {'bins': 3,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 2,
+              'nb_cluster': 3,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               }
@@ -182,7 +182,7 @@ def run_inference(simulated_data, structure, size_alphabet, base):
         if "_des" not in file:
             try:
                 some_method_succeeded = False
-                # file = "pair0003.txt"
+                #file = "pair0057.txt"
                 data = read_data(directory, file)
                 if simulated_data:
                     ground_truth = "X->Y"
@@ -252,4 +252,4 @@ if __name__ == '__main__':
     max_samples = 100
     size_alphabet = 3
     #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
-    run_inference(simulated_data=True, structure=structure, size_alphabet=size_alphabet, base=3)
+    run_inference(simulated_data=False, structure=structure, size_alphabet=size_alphabet, base=4)

@@ -3,6 +3,7 @@ library(mgcv)
 library(glmnet)
 library(InvariantCausalPrediction)
 library(nonlinearICP)
+library(gptk)
 
 # run RESIT with Tübingen CEP
 # Get the working directory
@@ -49,36 +50,46 @@ check_result <- function(model_output, ground_truth) {
 correct = 0
 not_correct = 0
 no_decision = 0
-for (file in list.files(file.path(wd, "../pairs/"))) {
-  if (in_str("pair0", file) & in_str("_des", file) == FALSE) {
+simulation = TRUE
+if (simulation == TRUE) {
+  directory = "../simulations/nonlinear_discrete/3/"
+} else {
+  directory = "../pairs/"
+}
+for (file in list.files(file.path(wd, directory))) {
+  if ((simulation == FALSE & in_str("pair0", file) & in_str("_des", file) == FALSE) | (simulation == TRUE)) {
     result = tryCatch({
       print(file)
-      #file="pair0100.txt"
+      #file="pair2.csv"
       
-      ce_pair_data <- read.csv(file.path(wd, paste("../pairs/",file, sep="")), sep=" ", header=FALSE)
+      ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=" ", header=FALSE)
       names(ce_pair_data) = c('X', 'Y')
       ce_pair_data = ce_pair_data[order(ce_pair_data$X),]
       ce_pair_data = as.data.frame(apply(ce_pair_data[, c('X', 'Y')], 2, function(x) (x - mean(x))/(sd(x))))
-      ce_pair_desc <- tolower(readLines(file.path(wd, gsub(".txt", "_des.txt", paste("../pairs/",file, sep="")))))
+      if (simulation == TRUE) {
+        ce_pair_desc = "x->y"
+      } else {
+        ce_pair_desc <- tolower(readLines(file.path(wd, gsub(".txt", "_des.txt", paste("../pairs/",file, sep="")))))
+      }
       
-      #res <- ICML(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), model = train_gam, indtest = indtestHsic, output = FALSE)
+      #res <- ICML(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), model = train_gp, indtest = indtestHsic, output = FALSE)
       #res <- GDS(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), "SEMIND", pars, check = "checkUntilFirst", output = FALSE, kvec = c(10000), startAt = "emptyGraph")$Adj
       #res <- lingamWrap(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']))$Adj
-      res <- BruteForce(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), "SEMIND", pars, output = FALSE)$Adj
-      # n=length(ce_pair_data[, 'X'])
-      # n_x = floor(n/2)
-      # ExpInd <- as.factor(c(rep(1,n_x),rep(2,n-n_x)))
-      # #res = nonlinearICP(cbind(ce_pair_data[, 'X']), ce_pair_data[, 'Y'], ExpInd)
-      # res = ICP(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], ExpInd)
-      # res_ = "no_decision"
-      # if (length(res$acceptedSets) > 0 && res$acceptedSets == 1){
-      #   res_ = "x->y"
-      # } else {
-      #   res = ICP(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], ExpInd)
-      #   if (length(res$acceptedSets) > 0 && res$acceptedSets == 1){
-      #     res_ = "y->x"
-      #   }
-      # }
+      #res <- BruteForce(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), "SEMIND", pars, output = FALSE)$Adj
+       # n=length(ce_pair_data[, 'X'])
+       # n_x = floor(n/2)
+       # ExpInd <- as.factor(c(rep(1,n_x),rep(2,n-n_x)))
+       # #res = nonlinearICP(cbind(ce_pair_data[, 'X']), ce_pair_data[, 'Y'], ExpInd)
+       # res = ICP(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], ExpInd)
+       # res_ = "no_decision"
+       # if (length(res$acceptedSets) > 0 && res$acceptedSets == 1){
+       #   res_ = "x->y"
+       # } else {
+       #   res = ICP(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], ExpInd)
+       #   if (length(res$acceptedSets) > 0 && res$acceptedSets == 1){
+       #     res_ = "y->x"
+       #   }
+       # }
         
       res_ = "no_decision"
       if (res[1,2] == 1) {

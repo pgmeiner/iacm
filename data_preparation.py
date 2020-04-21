@@ -8,9 +8,9 @@ from sklearn.cluster import KMeans, SpectralClustering, AgglomerativeClustering
 def read_data(directory, filename: str) -> pd.DataFrame:
     data = pd.read_csv(directory + '/' + filename, sep=" ", header=None)
     if data.shape[1] != 2:
-        data = pd.read_csv(directory + filename, sep="\t", header=None)
+        data = pd.read_csv(directory + '/' + filename, sep="\t", header=None)
         if data.shape[1] != 2:
-            data = pd.read_csv(directory + filename, sep="  ", header=None, engine='python')
+            data = pd.read_csv(directory + '/' + filename, sep="  ", header=None, engine='python')
     if data.shape[1] == 3:
         data.columns = ["X", "Y", "Z"]
     else:
