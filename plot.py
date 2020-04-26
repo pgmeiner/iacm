@@ -1,7 +1,8 @@
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
-if False:
+def init_figure():
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.set_xlim3d(0, 1)
@@ -22,12 +23,21 @@ if False:
     ax.plot(np.repeat(0, 50), np.repeat(0, 50), np.linspace(1, 0, 50), color='gray')
     ax.plot(np.linspace(1, 0, 50), np.repeat(0, 50), np.linspace(0, 1, 50), color='gray')
     ax.plot(np.repeat(0, 50), np.linspace(1, 0, 50), np.linspace(0, 1, 50), color='gray')
+    return ax
 
+
+#ax = init_figure()
 scatter_points = dict()
-for color in ['black', 'green', 'yellow', 'red']:
-    scatter_points[color] = dict()
-    for dim in ['x', 'y', 'z']:
-        scatter_points[color][dim] = list()
+
+
+def init_points():
+    for color in ['black', 'green', 'yellow', 'red']:
+        scatter_points[color] = dict()
+        for dim in ['x', 'y', 'z']:
+            scatter_points[color][dim] = list()
+
+
+#init_points()
 
 
 def plot_distribution(pxy, pxny, pnxy, pnxny, color):
@@ -45,6 +55,6 @@ def plot_distribution(pxy, pxny, pnxy, pnxny, color):
 def plot_distributions():
     for color in ['black', 'green', 'yellow', 'red']:
         ax.scatter(scatter_points[color]['x'], scatter_points[color]['y'], scatter_points[color]['z'], color=color,
-                   linewidth=1, s=1)
+                   linewidth=5, s=1)
 
     plt.show()

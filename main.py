@@ -100,23 +100,30 @@ def print_statisticts(statistics):
         print(value['not_correct_examples'])
 
 
-params = {2: {'bins': 50,
+params = {2: {'bins': 2,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 4,
+              'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3},
-          3: {'bins': 11,
+          3: {'bins': 14,
               'x_shift': 0,
               'y_shift': 0,
               'nb_cluster': 3,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               },
-          4: {'bins': 3,
+          4: {'bins': 9,
               'x_shift': 0,
               'y_shift': 0,
-              'nb_cluster': 3,
+              'nb_cluster': 2,
+              'prob_threshold_cluster': 0.7,
+              'prob_threshold_no_cluster': 0.3
+              },
+          5: {'bins': 2,
+              'x_shift': 0,
+              'y_shift': 0,
+              'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3
               }
@@ -132,7 +139,10 @@ def get_ground_truth(content):
 
 def get_stat_entry(data):
     total_number = data['correct'] + data['not_correct'] + data['no_decision']
-    return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(data['correct']) + "/" + str(total_number) + ")"
+    if total_number > 0:
+        return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(data['correct']) + "/" + str(total_number) + ")"
+    else:
+        return ""
 
 def print_for_evaluation(statistics, size_alphabet, params, base):
     print(str(size_alphabet) + ";" +
@@ -162,11 +172,23 @@ def run_simulations(structure, max_samples, size_alphabet, nr_simulations):
         data.to_csv(f'simulations/{structure}/{size_alphabet}/{filename}', sep=" ", header=False, index=False)
 
 
-def run_inference(simulated_data, structure, size_alphabet, base):
+def print_for_preprocess_evaluation(preprocessing_stat):
+    for k, v in preprocessing_stat.items():
+        res_str = str(k)
+        for method, element in v.items():
+            res_str = res_str + ";" + method
+            for stat_k, stat_v in element.items():
+                res_str = res_str + ";" + str(round(stat_v,3))
+        if len(v.items()) > 0:
+            print(res_str)
+
+
+def run_inference(simulated_data, structure, size_alphabet, base, params):
     statistics = {'igci': dict(), 'iacm_none': dict(), 'iacm_discrete_split': dict(), 'iacm_split_discrete': dict(),
                   'iacm_cluster_discrete': dict(),
                   'iacm_discrete_cluster': dict(), 'iacm_alternativ': dict(), 'iacm_theoretic_coverage': dict(),
                   'iacm_new_strategy': dict()}
+    preprocessing_stat = dict()
     for key, value in statistics.items():
         statistics[key] = {'correct': 0, 'not_correct': 0, 'no_decision': 0, 'not_correct_examples': [],
                            'correct_examples': []}
@@ -182,7 +204,7 @@ def run_inference(simulated_data, structure, size_alphabet, base):
         if "_des" not in file:
             try:
                 some_method_succeeded = False
-                #file = "pair0057.txt"
+                #file = "pair0010.txt"
                 data = read_data(directory, file)
                 if simulated_data:
                     ground_truth = "X->Y"
@@ -200,32 +222,39 @@ def run_inference(simulated_data, structure, size_alphabet, base):
                     statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + 1
                     statistics['igci']['not_correct_examples'].append(file)
 
-                for preprocess_method in ['none', 'discrete_split', 'split_discrete', 'discrete_cluster', 'cluster_discrete',
-                                          'alternativ', 'new_strategy']:
+                preprocessing_stat[file] = dict()
+                for preprocess_method in ['none', 'split_discrete', 'discrete_split', 'discrete_cluster', 'cluster_discrete', 'new_strategy']:
                     params[base]['preprocess_method'] = preprocess_method
                     if verbose: print(preprocess_method)
-                    res = iacm(base=base, data=data, params=params[base], verbose=verbose)
+                    preprocessing_stat[file][preprocess_method] = dict()
+                    res, stats = iacm(base=base, data=data, params=params[base], verbose=verbose)
+                    plot_distributions()
                     if ground_truth == res:
                         statistics['iacm_' + preprocess_method]['correct'] = statistics['iacm_' + preprocess_method][
                                                                                  'correct'] + 1
                         statistics['iacm_' + preprocess_method]['correct_examples'].append(file)
+                        preprocessing_stat[file][preprocess_method]['correct'] = 1
                         if not some_method_succeeded:
                             statistics['iacm_theoretic_coverage']['correct'] = statistics['iacm_theoretic_coverage'][
                                                                                    'correct'] + 1
                             statistics['iacm_theoretic_coverage']['correct_examples'].append(file)
                             some_method_succeeded = True
                         total_method = statistics['iacm_' + preprocess_method]['correct'] + statistics['iacm_' + preprocess_method]['not_correct'] + statistics['iacm_' + preprocess_method]['no_decision']
-                        print("correct: " + str(statistics['iacm_' + preprocess_method]['correct'] / total_method))
+                        if verbose: print("correct: " + str(statistics['iacm_' + preprocess_method]['correct'] / total_method))
                     elif "no decision" in res:
                         statistics['iacm_' + preprocess_method]['no_decision'] = \
                         statistics['iacm_' + preprocess_method]['no_decision'] + 1
+                        preprocessing_stat[file][preprocess_method]['correct'] = 0
                         statistics['iacm_theoretic_coverage']['not_correct_examples'].append(file)
-                        print("no decision")
+                        if verbose: print("no decision")
                     else:
                         statistics['iacm_' + preprocess_method]['not_correct'] = \
                         statistics['iacm_' + preprocess_method]['not_correct'] + 1
+                        preprocessing_stat[file][preprocess_method]['correct'] = 0
                         statistics['iacm_' + preprocess_method]['not_correct_examples'].append(file)
-                        print("not correct")
+                        if verbose: print("not correct")
+                    for k,v in stats.items():
+                        preprocessing_stat[file][preprocess_method][k] = v
                 if not some_method_succeeded:
                     statistics['iacm_theoretic_coverage']['not_correct_examples'].append(file)
                     statistics['iacm_theoretic_coverage']['not_correct'] = statistics['iacm_theoretic_coverage'][
@@ -233,17 +262,18 @@ def run_inference(simulated_data, structure, size_alphabet, base):
 
                 total = total + 1
                 if verbose: print(str(statistics['iacm_cluster']['correct']) + 'from' + str(total))
-                print(total)
+                if verbose: print(total)
 
             except Exception as e:
                 not_touched_files.append(file)
 
-    print_statisticts(statistics)
-    print("not touched files")
-    print(not_touched_files)
+    if verbose: print_statisticts(statistics)
+    if verbose: print("not touched files")
+    if verbose: print(not_touched_files)
 
     # print out for evaluation
     print_for_evaluation(statistics, size_alphabet, params[base], base)
+    #print_for_preprocess_evaluation(preprocessing_stat)
 
 
 if __name__ == '__main__':
@@ -252,4 +282,8 @@ if __name__ == '__main__':
     max_samples = 100
     size_alphabet = 3
     #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
-    run_inference(simulated_data=False, structure=structure, size_alphabet=size_alphabet, base=4)
+    for bins in range(2, 11):
+        for clt in range(2,4):
+            params[2]['bins'] = bins
+            params[2]['nb_cluster'] = clt
+            run_inference(simulated_data=False, structure=structure, size_alphabet=size_alphabet, base=2, params=params)

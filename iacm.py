@@ -5,13 +5,14 @@ import pandas as pd
 from data_preparation import get_probabilities, get_probabilities_intervention, WriteContingencyTable, \
     getContingencyTables, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels
 from meta_data import setup_meta_data, base_repr
-from plot import plot_distribution
+from plot import plot_distribution, plot_distributions, init_points, init_figure
 from typing import List
 
 meta_data = dict()
 meta_data[2] = setup_meta_data(base=2, nb_variables=4)
 meta_data[3] = setup_meta_data(base=3, nb_variables=5)
 meta_data[4] = setup_meta_data(base=4, nb_variables=6)
+#meta_data[5] = setup_meta_data(base=5, nb_variables=7)
 
 
 def get_constraint_data(base, list_of_distributions):
@@ -63,12 +64,16 @@ def approximateToCausalModel(base, obsConTable, ExpConTable, drawObsData, color,
     constraint_data = get_constraint_data(base=base, list_of_distributions=constraint_distr)#Py_nx, Py_x, Pnxy, Pxny, Pxy])
 
     modeldata = FindBestApproximationToConsistentModel(base, constraint_data)
-    if verbose:
+    if drawObsData:
         print("approximated distribution")
-        if "Pxy" in modeldata:
-            print("Pxy:" + str(modeldata["Pxy"]) + " Pxny:" + str(modeldata["Pxny"]) + " Pnxy:" + str(
-                modeldata["Pnxy"]) + " Pnxny:" + str(modeldata["Pnxny"]))
-            plot_distribution(modeldata["Pxy"], modeldata["Pxny"], modeldata["Pnxy"], modeldata["Pnxny"], color)
+        if "NP" in modeldata:
+            #print("Pxy:" + str(modeldata["Pxy"]) + " Pxny:" + str(modeldata["Pxny"]) + " Pnxy:" + str(
+            #    modeldata["Pnxy"]) + " Pnxny:" + str(modeldata["Pnxny"]))
+            Pxy = modeldata['NP']['1100'] + modeldata['NP']['1101'] + modeldata['NP']['1110'] + modeldata['NP']['1111']
+            Pxny = modeldata['NP']['1000'] + modeldata['NP']['1001'] + modeldata['NP']['1010'] + modeldata['NP']['1011']
+            Pnxy = modeldata['NP']['0100'] + modeldata['NP']['0101'] + modeldata['NP']['0110'] + modeldata['NP']['0111']
+            Pnxny = modeldata['NP']['0000'] + modeldata['NP']['0001'] + modeldata['NP']['0010'] + modeldata['NP']['0011']
+            plot_distribution(Pxy, Pxny, Pnxy, Pnxny, color)
     return modeldata
 
 
@@ -152,7 +157,9 @@ def testModelFromXtoY(base, obsX, obsY, intX, intY, drawObsData, color, verbose)
     ExperimentContigenceTable = getContingencyTables(intX, intY, base)
     ObservationContigenceTable = getContingencyTables(obsX, obsY, base)
 
-    if verbose:
+    #ObservationContigenceTable = [[2, 28], [998,972]]
+    #ExperimentContigenceTable = [[16, 14], [984, 986]]
+    if verbose or drawObsData:
         WriteContingencyTable(ObservationContigenceTable, base)
         WriteContingencyTable(ExperimentContigenceTable, base)
 
@@ -215,6 +222,9 @@ def preprocessing(data, sort_col, params, base):
             obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
         elif mi_s < min(mi_ds, mi_dc):
             obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
+            dataXY = pd.concat([pd.concat([obsX, intX]), pd.concat([obsY, intY])], axis=1)
+            disc_data = discretize_data(dataXY, params)
+            obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max)
         else:
             disc_data = discretize_data(data, params)
             (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
@@ -287,15 +297,11 @@ def mutual_information(observation_contingence_table, base) -> float:
     return sum([KL_term(e_p,e_q) for e_p, e_q in zip(p_x, p_y)])
 
 
-def calc_variations(observation_contingence_table, sort_col):
+def calc_variations(observation_contingence_table, sort_col, base):
     if 'X' in sort_col:
-        return min([entropy(observation_contingence_table[0]),
-            entropy(observation_contingence_table[1]),
-            entropy(observation_contingence_table[2])])
+        return min([entropy(observation_contingence_table[i]) for i in range(0, base)])
     else:
-        return min([entropy([observation_contingence_table[0][0],observation_contingence_table[1][0],observation_contingence_table[2][0]]),
-                   entropy([observation_contingence_table[0][1],observation_contingence_table[1][1],observation_contingence_table[2][1]]),
-                   entropy([observation_contingence_table[0][2],observation_contingence_table[1][2],observation_contingence_table[2][2]])])
+        return min([entropy([observation_contingence_table[j][i] for j in range(0,base)]) for i in range(0, base)])
 
 
 def iacm(base, data: pd.DataFrame, params, verbose):
@@ -304,8 +310,16 @@ def iacm(base, data: pd.DataFrame, params, verbose):
     result = dict()
     for sort_col in ['X', 'Y']:
         obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base)
-        modelXtoY = testModelFromXtoY(base, obsX, obsY, intX, intY, True, "green", verbose)
-        modelYtoX = testModelFromXtoY(base, obsY, obsX, intY, intX, False, "yellow", verbose)
+        result['statistics'+sort_col] = dict()
+        result['statistics'+sort_col]['mi'] = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        result['statistics'+sort_col]['var'] = calc_variations(getContingencyTables(obsX, obsY, base), sort_col, base)
+        result['statistics'+sort_col]['obsX_var'] = obsX.var()
+        result['statistics'+sort_col]['obsY_var'] = obsY.var()
+        result['statistics'+sort_col]['intX_var'] = intX.var()
+        result['statistics'+sort_col]['intY_var'] = intY.var()
+        #init_points()
+        modelXtoY = testModelFromXtoY(base, obsX, obsY, intX, intY, False, "green", verbose)
+        modelYtoX = testModelFromXtoY(base, obsY, obsX, intY, intX, False, "red", verbose)
         errorXtoY = calcError(modelXtoY)
         if verbose: print("total Error X -> Y: " + str(errorXtoY))
         errorYtoX = calcError(modelYtoX)
@@ -329,11 +343,11 @@ def iacm(base, data: pd.DataFrame, params, verbose):
     #     return result['Y']
 
     if error_gap['X'] == 1 and error_gap['Y'] == 1:
-        return "no decision"
+        return "no decision", result['statisticsY']
     elif (1 / error_gap['X']) < (1 / error_gap['Y']):
-        return result['Y']
+        return result['Y'], result['statisticsY']
     else:
-        return result['X']
+        return result['X'], result['statisticsX']
 
     # for color in ['black', 'green', 'yellow', 'red']:
     #    ax.scatter(scatter_points[color]['x'], scatter_points[color]['y'], scatter_points[color]['z'], color=color, linewidth=1, s=2)
