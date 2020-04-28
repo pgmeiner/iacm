@@ -198,14 +198,14 @@ def preprocessing(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int
     elif params['preprocess_method'] == 'new_strategy':
         disc_data = discretize_data(data, params)
         obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
-        mi_ds = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base)
+        mi_ds = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
         #variation_disc_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
-        mi_s = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base)
+        mi_s = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
         #variation_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         disc_data = discretize_data(data, params)
         (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
-        mi_dc = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base)
+        mi_dc = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
         #variation_disc_cluster = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         #print("v_ds " + str(variation_disc_split))
         #print("v_s " + str(variation_split))
@@ -269,10 +269,9 @@ def KL_term(p,q):
         return p*log2(p/q)
 
 
-def mutual_information(observation_contingence_table, base) -> float:
-    nb_max = base
-    X = [sum(observation_contingence_table[i]) for i in range(0, nb_max)]
-    Y = [sum([observation_contingence_table[i][j] for i in range(0, nb_max)]) for j in range(0, nb_max)]
+def mutual_information(observation_contingence_table, base_x: int, base_y: int) -> float:
+    X = [sum(observation_contingence_table[i]) for i in range(0, base_x)]
+    Y = [sum([observation_contingence_table[i][j] for i in range(0, base_x)]) for j in range(0, base_y)]
     x_sum = sum(X)
     y_sum = sum(Y)
     if x_sum > 0:
