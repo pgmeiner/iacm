@@ -9,9 +9,9 @@ from plot import plot_distribution, plot_distributions, init_points, init_figure
 from typing import List
 
 meta_data = dict()
-meta_data[2] = setup_meta_data(base=2, nb_variables=4)
-meta_data[3] = setup_meta_data(base=3, nb_variables=5)
-meta_data[4] = setup_meta_data(base=4, nb_variables=6)
+meta_data['2_2'] = setup_meta_data(base=2, nb_variables=4)
+meta_data['3_3'] = setup_meta_data(base=3, nb_variables=5)
+meta_data['4_4'] = setup_meta_data(base=4, nb_variables=6)
 #meta_data[5] = setup_meta_data(base=5, nb_variables=7)
 
 
@@ -296,11 +296,11 @@ def mutual_information(observation_contingence_table, base_x: int, base_y: int) 
     return sum([KL_term(e_p,e_q) for e_p, e_q in zip(p_x, p_y)])
 
 
-def calc_variations(observation_contingence_table, sort_col, base):
+def calc_variations(observation_contingence_table, sort_col, base_x, base_y):
     if 'X' in sort_col:
-        return min([entropy(observation_contingence_table[i]) for i in range(0, base)])
+        return min([entropy(observation_contingence_table[i]) for i in range(0, base_x)])
     else:
-        return min([entropy([observation_contingence_table[j][i] for j in range(0,base)]) for i in range(0, base)])
+        return min([entropy([observation_contingence_table[j][i] for j in range(0,base_x)]) for i in range(0, base_y)])
 
 
 def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
@@ -317,7 +317,7 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
         result['statistics'+sort_col]['intX_var'] = intX.var()
         result['statistics'+sort_col]['intY_var'] = intY.var()
         #init_points()
-        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, True, "green", verbose)
+        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", verbose)
         modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", verbose)
         errorXtoY = calcError(modelXtoY)
         if verbose: print("total Error X -> Y: " + str(errorXtoY))

@@ -183,7 +183,7 @@ def print_for_preprocess_evaluation(preprocessing_stat):
             print(res_str)
 
 
-def run_inference(simulated_data, structure, size_alphabet, base, params):
+def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, params):
     statistics = {'igci': dict(), 'iacm_none': dict(), 'iacm_discrete_split': dict(), 'iacm_split_discrete': dict(),
                   'iacm_cluster_discrete': dict(),
                   'iacm_discrete_cluster': dict(), 'iacm_alternativ': dict(), 'iacm_theoretic_coverage': dict(),
@@ -224,11 +224,11 @@ def run_inference(simulated_data, structure, size_alphabet, base, params):
 
                 preprocessing_stat[file] = dict()
                 for preprocess_method in ['none', 'split_discrete', 'discrete_split', 'discrete_cluster', 'cluster_discrete', 'new_strategy']:
-                    params[base]['preprocess_method'] = preprocess_method
+                    params[base_x]['preprocess_method'] = preprocess_method
                     if verbose: print(preprocess_method)
                     preprocessing_stat[file][preprocess_method] = dict()
-                    res, stats = iacm(base=base, data=data, params=params[base], verbose=verbose)
-                    plot_distributions()
+                    res, stats = iacm(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose)
+                    #plot_distributions()
                     if ground_truth == res:
                         statistics['iacm_' + preprocess_method]['correct'] = statistics['iacm_' + preprocess_method][
                                                                                  'correct'] + 1
@@ -272,7 +272,7 @@ def run_inference(simulated_data, structure, size_alphabet, base, params):
     if verbose: print(not_touched_files)
 
     # print out for evaluation
-    print_for_evaluation(statistics, size_alphabet, params[base], base)
+    print_for_evaluation(statistics, size_alphabet, params[base_x], base_x)
     #print_for_preprocess_evaluation(preprocessing_stat)
 
 
@@ -286,4 +286,4 @@ if __name__ == '__main__':
         for clt in range(2,4):
             params[2]['bins'] = bins
             params[2]['nb_cluster'] = clt
-            run_inference(simulated_data=False, structure=structure, size_alphabet=size_alphabet, base=2, params=params)
+            run_inference(simulated_data=False, structure=structure, size_alphabet=size_alphabet, base_x=2, base_y=2, params=params)

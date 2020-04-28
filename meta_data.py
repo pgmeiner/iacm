@@ -8,7 +8,7 @@ from utils import insert, flatten, count_char
 def setup_meta_data(base, nb_variables):
     meta_data = dict()
     size_prob = pow(base, nb_variables)
-    meta_data['base'] = base
+    meta_data['base_x'] = base
     meta_data['nb_variables'] = nb_variables
     meta_data['size_prob'] = size_prob
 
