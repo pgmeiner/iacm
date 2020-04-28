@@ -15,16 +15,16 @@ meta_data[4] = setup_meta_data(base=4, nb_variables=6)
 #meta_data[5] = setup_meta_data(base=5, nb_variables=7)
 
 
-def get_constraint_data(base, list_of_distributions):
+def get_constraint_data(base_x: int, base_y: int, list_of_distributions):
     constraint_data = dict()
 
-    for value, pattern in zip(list_of_distributions, meta_data[base]['constraint_patterns']):
+    for value, pattern in zip(list_of_distributions, meta_data[str(base_x) + '_' + str(base_y)]['constraint_patterns']):
         constraint_data[pattern] = value
 
     return constraint_data
 
 
-def get_constraint_distribution(P, P_i, base):
+def get_constraint_distribution(P, P_i, base_x: int, base_y: int):
     # if base == 2:
     #     return [P_i['1_1'], P_i['0_1'], P['11'], P['10'], P['01']]
     # elif base == 3:
@@ -32,13 +32,13 @@ def get_constraint_distribution(P, P_i, base):
     #             P['22'], P['21'], P['20'], P['12'], P['11'], P['10'], P['02'], P['01']]
 
     constraint_distr = []
-    for value_y in range(1, base):
-        for value_x in range(base-1, -1, -1):
+    for value_y in range(1, base_y):
+        for value_x in range(base_x-1, -1, -1):
             index = str(value_x) + '_' + str(value_y)
             constraint_distr.append(P_i[index])
 
-    for value_x in range(base-1, -1, -1):
-        for value_y in range(base-1, -1, -1):
+    for value_x in range(base_x-1, -1, -1):
+        for value_y in range(base_y-1, -1, -1):
             if (value_x == 0) and (value_y == 0):
                 continue
             index = str(value_x) + str(value_y)
@@ -47,23 +47,23 @@ def get_constraint_distribution(P, P_i, base):
     return constraint_distr
 
 
-def approximateToCausalModel(base, obsConTable, ExpConTable, drawObsData, color, verbose):
-    P = get_probabilities(obsConTable, base)
-    P_i = get_probabilities_intervention(ExpConTable, base)
-    constraint_distr = get_constraint_distribution(P, P_i, base)
+def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable, drawObsData, color, verbose):
+    P = get_probabilities(obsConTable, base_x, base_y)
+    P_i = get_probabilities_intervention(ExpConTable, base_x, base_y)
+    constraint_distr = get_constraint_distribution(P, P_i, base_x, base_y)
     if verbose:
         for key, value in P.items():
             print(key + ":" + str(value))
     #print("Pxy:" + str(Pxy) + " Pxny:" + str(Pxny) + " Pnxy:" + str(Pnxy) + " Pnxny:" + str(Pnxny))
-    if drawObsData and base == 2:
+    if drawObsData and base_x == 2 and base_y == 2:
         plot_distribution(P['11'], P['10'], P['01'], P['00'], "black")
     if verbose:
         for key, value in P_i.items():
             print(key + ":" + str(value))
     #print("Py_x:" + str(Py_x) + " Py_nx:" + str(Py_nx) + " Pny_x:" + str(Pny_x) + " Pny_nx:" + str(Pny_nx))
-    constraint_data = get_constraint_data(base=base, list_of_distributions=constraint_distr)#Py_nx, Py_x, Pnxy, Pxny, Pxy])
+    constraint_data = get_constraint_data(base_x=base_x, base_y=base_y, list_of_distributions=constraint_distr)#Py_nx, Py_x, Pnxy, Pxny, Pxy])
 
-    modeldata = FindBestApproximationToConsistentModel(base, constraint_data)
+    modeldata = FindBestApproximationToConsistentModel(base_x, base_y, constraint_data)
     if drawObsData:
         print("approximated distribution")
         if "NP" in modeldata:
@@ -91,19 +91,19 @@ def get_causal_prob_monotony(py, pxy, pnxny, py_x, py_nx):
     return PN, PS, PNS
 
 
-def FindBestApproximationToConsistentModel(base, constraint_data):
+def FindBestApproximationToConsistentModel(base_x: int, base_y: int, constraint_data):
     res = dict()
+    meta_data_idx = str(base_x) + '_' + str(base_y)
+    size_prob = meta_data[meta_data_idx]['size_prob']
+    base = meta_data[meta_data_idx]['base_x']
+    nb_variables = meta_data[meta_data_idx]['nb_variables']
+    B = meta_data[meta_data_idx]['B']
+    d = meta_data[meta_data_idx]['d']
+    F = meta_data[meta_data_idx]['F']
+    c = meta_data[meta_data_idx]['c']
+    S_codes = meta_data[meta_data_idx]['S_codes']
 
-    size_prob = meta_data[base]['size_prob']
-    base = meta_data[base]['base']
-    nb_variables = meta_data[base]['nb_variables']
-    B = meta_data[base]['B']
-    d = meta_data[base]['d']
-    F = meta_data[base]['F']
-    c = meta_data[base]['c']
-    S_codes = meta_data[base]['S_codes']
-
-    b = np.array([1.0] + [constraint_data[pattern] for pattern in meta_data[base]['constraint_patterns']])
+    b = np.array([1.0] + [constraint_data[pattern] for pattern in meta_data[meta_data_idx]['constraint_patterns']])
 
     # create and run the solver
     x = cp.Variable(shape=size_prob)
@@ -153,17 +153,17 @@ def FindBestApproximationToConsistentModel(base, constraint_data):
     return res
 
 
-def testModelFromXtoY(base, obsX, obsY, intX, intY, drawObsData, color, verbose):
-    ExperimentContigenceTable = getContingencyTables(intX, intY, base)
-    ObservationContigenceTable = getContingencyTables(obsX, obsY, base)
+def testModelFromXtoY(base_x: int, base_y: int, obsX, obsY, intX, intY, drawObsData, color, verbose):
+    ExperimentContigenceTable = getContingencyTables(intX, intY, base_x, base_y)
+    ObservationContigenceTable = getContingencyTables(obsX, obsY, base_x, base_y)
 
     #ObservationContigenceTable = [[2, 28], [998,972]]
     #ExperimentContigenceTable = [[16, 14], [984, 986]]
     if verbose or drawObsData:
-        WriteContingencyTable(ObservationContigenceTable, base)
-        WriteContingencyTable(ExperimentContigenceTable, base)
+        WriteContingencyTable(ObservationContigenceTable, base_x, base_y)
+        WriteContingencyTable(ExperimentContigenceTable, base_x, base_y)
 
-    return approximateToCausalModel(base, ObservationContigenceTable, ExperimentContigenceTable, drawObsData, color, verbose)
+    return approximateToCausalModel(base_x, base_y, ObservationContigenceTable, ExperimentContigenceTable, drawObsData, color, verbose)
 
 
 def localError(P_nom, P_denom, S):
@@ -182,7 +182,7 @@ def calcError(model):
         return 1000000.0
 
 
-def preprocessing(data, sort_col, params, base):
+def preprocessing(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int):
     if params['preprocess_method'] == 'none':
         split_idx = int(data.shape[0] / 2)
         obsX, obsY, intX, intY = split_data_at_index(data, split_idx)
@@ -205,14 +205,14 @@ def preprocessing(data, sort_col, params, base):
     elif params['preprocess_method'] == 'new_strategy':
         disc_data = discretize_data(data, params)
         obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
-        mi_ds = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        mi_ds = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
         #variation_disc_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
-        mi_s = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        mi_s = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
         #variation_split = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         disc_data = discretize_data(data, params)
         (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
-        mi_dc = mutual_information(getContingencyTables(obsX, obsY, base), base)
+        mi_dc = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
         #variation_disc_cluster = calc_variations(getContingencyTables(obsX, obsY, base), sort_col)
         #print("v_ds " + str(variation_disc_split))
         #print("v_s " + str(variation_split))
@@ -235,9 +235,9 @@ def preprocessing(data, sort_col, params, base):
         obsY = cobsY
         intX = cintX
         intY = cintY
-        if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) > params['prob_threshold_cluster']):
+        if (max(get_probabilities(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y).values()) > params['prob_threshold_cluster']):
             obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
-            if (max(get_probabilities(getContingencyTables(obsX, obsY, base), base).values()) <= params['prob_threshold_no_cluster']):
+            if (max(get_probabilities(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y).values()) <= params['prob_threshold_no_cluster']):
                 obsX = cobsX
                 obsY = cobsY
                 intX = cintX
@@ -279,10 +279,9 @@ def KL_term(p,q):
         return p*log2(p/q)
 
 
-def mutual_information(observation_contingence_table, base) -> float:
-    nb_max = base
-    X = [sum(observation_contingence_table[i]) for i in range(0, nb_max)]
-    Y = [sum([observation_contingence_table[i][j] for i in range(0, nb_max)]) for j in range(0, nb_max)]
+def mutual_information(observation_contingence_table, base_x: int, base_y: int) -> float:
+    X = [sum(observation_contingence_table[i]) for i in range(0, base_x)]
+    Y = [sum([observation_contingence_table[i][j] for i in range(0, base_x)]) for j in range(0, base_y)]
     x_sum = sum(X)
     y_sum = sum(Y)
     if x_sum > 0:
@@ -304,22 +303,22 @@ def calc_variations(observation_contingence_table, sort_col, base):
         return min([entropy([observation_contingence_table[j][i] for j in range(0,base)]) for i in range(0, base)])
 
 
-def iacm(base, data: pd.DataFrame, params, verbose):
+def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
     error_gap = dict()
     pn_error = dict()
     result = dict()
     for sort_col in ['X', 'Y']:
-        obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base)
+        obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base_x, base_y)
         result['statistics'+sort_col] = dict()
-        result['statistics'+sort_col]['mi'] = mutual_information(getContingencyTables(obsX, obsY, base), base)
-        result['statistics'+sort_col]['var'] = calc_variations(getContingencyTables(obsX, obsY, base), sort_col, base)
+        result['statistics'+sort_col]['mi'] = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
+        result['statistics'+sort_col]['var'] = calc_variations(getContingencyTables(obsX, obsY, base_x, base_y), sort_col, base_x, base_y)
         result['statistics'+sort_col]['obsX_var'] = obsX.var()
         result['statistics'+sort_col]['obsY_var'] = obsY.var()
         result['statistics'+sort_col]['intX_var'] = intX.var()
         result['statistics'+sort_col]['intY_var'] = intY.var()
         #init_points()
-        modelXtoY = testModelFromXtoY(base, obsX, obsY, intX, intY, False, "green", verbose)
-        modelYtoX = testModelFromXtoY(base, obsY, obsX, intY, intX, False, "red", verbose)
+        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, True, "green", verbose)
+        modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", verbose)
         errorXtoY = calcError(modelXtoY)
         if verbose: print("total Error X -> Y: " + str(errorXtoY))
         errorYtoX = calcError(modelYtoX)

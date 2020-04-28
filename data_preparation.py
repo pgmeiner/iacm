@@ -18,13 +18,13 @@ def read_data(directory, filename: str) -> pd.DataFrame:
     return data
 
 
-def getContingencyTables(X, Y, base):
+def getContingencyTables(X, Y, base_x: int, base_y: int):
     # ctable[x][y]
-    ctable = [[1] * base for _ in range(0, base)]
+    ctable = [[1] * base_x for _ in range(0, base_y)]
     if X.empty or Y.empty:
         return ctable
-    threshold_x = np.quantile(X, [i/base for i in range(1, base+1)])#[0, max(X) + 1]
-    threshold_y = np.quantile(Y, [i/base for i in range(1, base+1)])#[0, max(Y) + 1]
+    threshold_x = np.quantile(X, [i/base_x for i in range(1, base_x+1)])#[0, max(X) + 1]
+    threshold_y = np.quantile(Y, [i/base_y for i in range(1, base_y+1)])#[0, max(Y) + 1]
     for x, y in zip(X,Y):
         set = False
         for i, thresh_x in enumerate(threshold_x):
@@ -89,10 +89,10 @@ def getContingencyTables_ternary(X, Y):
     return ctable
 
 
-def WriteContingencyTable(contingenceTable, base):
-    if base == 2:
+def WriteContingencyTable(contingenceTable, base_x, base_y):
+    if base_x == 2:
         WriteContingencyTable_binary(contingenceTable)
-    elif base == 3:
+    elif base_x == 3:
         WriteContingencyTable_ternary(contingenceTable)
 
 
@@ -111,23 +111,23 @@ def WriteContingencyTable_ternary(contingenceTable):
     print("y_2|" + str(contingenceTable[0][2]) + " | " + str(contingenceTable[1][2]) + " | " + str(contingenceTable[2][2]))
 
 
-def get_probabilities(contingenceTable, base):
-    sum = np.sum([float(contingenceTable[i][j]) for i in range(0, base) for j in range(0, base)])
+def get_probabilities(contingenceTable, base_x: int, base_y: int):
+    sum = np.sum([float(contingenceTable[i][j]) for i in range(0, base_x) for j in range(0, base_y)])
 
     P = dict()
-    for x_i in range(0, base):
-        for y_i in range(0, base):
+    for x_i in range(0, base_x):
+        for y_i in range(0, base_y):
             index = str(x_i) + str(y_i)
             P[index] = contingenceTable[x_i][y_i] / sum
     return P
 
 
-def get_probabilities_intervention(contingenceTable, base):
+def get_probabilities_intervention(contingenceTable, base_x: int, base_y: int):
     P_i = dict()
-    for x_i in range(0, base):
-        for y_i in range(0, base):
+    for x_i in range(0, base_x):
+        for y_i in range(0, base_y):
             index = str(x_i) + '_' + str(y_i)
-            denom = np.sum([contingenceTable[x_i][j] for j in range(0, base)])
+            denom = np.sum([contingenceTable[x_i][j] for j in range(0, base_y)])
             if denom == 0:
                 P_i[index] = 0.0
             else:
