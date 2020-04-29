@@ -10,6 +10,8 @@ from typing import List
 
 meta_data = dict()
 meta_data['2_2'] = setup_meta_data(base=2, nb_variables=4)
+meta_data['2_2_m_d'] = setup_meta_data(base=2, nb_variables=4, monotone_decr=True, monotone_incr=False)
+meta_data['2_2_m_i'] = setup_meta_data(base=2, nb_variables=4, monotone_decr=False, monotone_incr=True)
 meta_data['3_3'] = setup_meta_data(base=3, nb_variables=5)
 meta_data['4_4'] = setup_meta_data(base=4, nb_variables=6)
 #meta_data[5] = setup_meta_data(base=5, nb_variables=7)
@@ -47,7 +49,7 @@ def get_constraint_distribution(P, P_i, base_x: int, base_y: int):
     return constraint_distr
 
 
-def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable, drawObsData, color, verbose):
+def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable, drawObsData, color, monotone, verbose):
     P = get_probabilities(obsConTable, base_x, base_y)
     P_i = get_probabilities_intervention(ExpConTable, base_x, base_y)
     constraint_distr = get_constraint_distribution(P, P_i, base_x, base_y)
@@ -63,7 +65,31 @@ def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable,
     #print("Py_x:" + str(Py_x) + " Py_nx:" + str(Py_nx) + " Pny_x:" + str(Pny_x) + " Pny_nx:" + str(Pny_nx))
     constraint_data = get_constraint_data(base_x=base_x, base_y=base_y, list_of_distributions=constraint_distr)#Py_nx, Py_x, Pnxy, Pxny, Pxy])
 
-    modeldata = FindBestApproximationToConsistentModel(base_x, base_y, constraint_data)
+    meta_data_idx = str(base_x) + '_' + str(base_y)
+    if monotone:
+        modeldata_mon_decr = FindBestApproximationToConsistentModel(constraint_data, meta_data[meta_data_idx + '_m_d'])
+        modeldata_mon_incr = FindBestApproximationToConsistentModel(constraint_data, meta_data[meta_data_idx + '_m_i'])
+
+        if (len(modeldata_mon_incr) == 0) and (len(modeldata_mon_decr) == 0):
+            modeldata = dict()
+            PN, PS, PNS = 0, 0, 0
+        elif len(modeldata_mon_incr) == 0:
+            modeldata = modeldata_mon_decr
+            PN, PS, PNS = calculate_causal_prob(modeldata['NP'], False)
+        elif len(modeldata_mon_decr) == 0:
+            modeldata = modeldata_mon_incr
+            PN, PS, PNS = calculate_causal_prob(modeldata['NP'], True)
+        elif modeldata_mon_incr['GlobalError'] < modeldata_mon_decr['GlobalError']:
+            modeldata = modeldata_mon_incr
+            PN, PS, PNS = calculate_causal_prob(modeldata['NP'], True)
+        else:
+            modeldata = modeldata_mon_decr
+            PN, PS, PNS = calculate_causal_prob(modeldata['NP'], False)
+        modeldata['PN'] = PN
+        modeldata['PS'] = PS
+        modeldata['PNS'] = PNS
+    else:
+        modeldata = FindBestApproximationToConsistentModel(constraint_data, meta_data[meta_data_idx])
     if drawObsData:
         print("approximated distribution")
         if "NP" in modeldata:
@@ -77,33 +103,54 @@ def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable,
     return modeldata
 
 
-def get_causal_prob_monotony(py, pxy, pnxny, py_x, py_nx):
-    PNS = py_x - py_nx
-    if pxy > 0:
-        PN = (py - py_nx) / pxy
+def calculate_causal_prob(NP, increase):
+    pxy = NP['1100'] + NP['1101'] + NP['1110'] + NP['1111']
+    pnxy = NP['0100'] + NP['0101'] + NP['0110'] + NP['0111']
+    pnxny = NP['0000'] + NP['0001'] + NP['0010'] + NP['0011']
+    py = pxy + pnxy
+    py_x = NP['0001'] + NP['0011'] + NP['0101'] + NP['0111'] + NP['1001'] + NP['1011'] + NP['1101'] + NP['1111']
+    py_nx = NP['0010'] + NP['0011'] + NP['0110'] + NP['0111'] + NP['1010'] + NP['1011'] + NP['1110'] + NP['1111']
+    PN, PS, PNS = get_causal_prob_monotony(py=py, pxy=pxy, pnxny=pnxny, py_x=py_x, py_nx=py_nx, increase=increase)
+    return PN, PS, PNS
+
+
+def get_causal_prob_monotony(py, pxy, pnxny, py_x, py_nx, increase):
+    if increase:
+        PNS = py_x - py_nx
+        if pxy > 0:
+            PN = (py - py_nx) / pxy
+        else:
+            PN = 0
+        if pnxny > 0:
+            PS = (py_x - py) / pnxny
+        else:
+            PS = 0
     else:
-        PN = 0
-    if pnxny > 0:
-        PS = (py_x - py) / pnxny
-    else:
-        PS = 0
+        PNS = py_nx - py_x
+        if pxy > 0:
+            PN = (py - py_nx) / pxy
+        else:
+            PN = 0
+        if pnxny > 0:
+            PS = (py_x - py) / pnxny
+        else:
+            PS = 0
 
     return PN, PS, PNS
 
 
-def FindBestApproximationToConsistentModel(base_x: int, base_y: int, constraint_data):
+def FindBestApproximationToConsistentModel(constraint_data, meta_data):
     res = dict()
-    meta_data_idx = str(base_x) + '_' + str(base_y)
-    size_prob = meta_data[meta_data_idx]['size_prob']
-    base = meta_data[meta_data_idx]['base_x']
-    nb_variables = meta_data[meta_data_idx]['nb_variables']
-    B = meta_data[meta_data_idx]['B']
-    d = meta_data[meta_data_idx]['d']
-    F = meta_data[meta_data_idx]['F']
-    c = meta_data[meta_data_idx]['c']
-    S_codes = meta_data[meta_data_idx]['S_codes']
+    size_prob = meta_data['size_prob']
+    base = meta_data['base_x']
+    nb_variables = meta_data['nb_variables']
+    B = meta_data['B']
+    d = meta_data['d']
+    F = meta_data['F']
+    c = meta_data['c']
+    S_codes = meta_data['S_codes']
 
-    b = np.array([1.0] + [constraint_data[pattern] for pattern in meta_data[meta_data_idx]['constraint_patterns']])
+    b = np.array([1.0] + [constraint_data[pattern] for pattern in meta_data['constraint_patterns']])
 
     # create and run the solver
     x = cp.Variable(shape=size_prob)
@@ -138,22 +185,11 @@ def FindBestApproximationToConsistentModel(base_x: int, base_y: int, constraint_
 
     res['NP'] = NP
     res["GlobalError"] = log2(1 / S)
-    if base == 2:
-        pxy = NP['1100'] + NP['1101'] + NP['1110'] + NP['1111']
-        pnxy = NP['0100'] + NP['0101'] + NP['0110'] + NP['0111']
-        pnxny = NP['0000'] + NP['0001'] + NP['0010'] + NP['0011']
-        py = pxy + pnxy
-        py_x = NP['0010'] + NP['0011'] + NP['0110'] + NP['0111'] + NP['1010'] + NP['1011'] + NP['1110'] + NP['1111']
-        py_nx = NP['0001'] + NP['0011'] + NP['0101'] + NP['0111'] + NP['1001'] + NP['1011'] + NP['1101'] + NP['1111']
-        PN, PS, PNS = get_causal_prob_monotony(py=py, pxy=pxy, pnxny=pnxny, py_x=py_x, py_nx=py_nx)
-        res['PN'] = PN
-        res['PS'] = PS
-        res['PNS'] = PNS
 
     return res
 
 
-def testModelFromXtoY(base_x: int, base_y: int, obsX, obsY, intX, intY, drawObsData, color, verbose):
+def testModelFromXtoY(base_x: int, base_y: int, obsX, obsY, intX, intY, drawObsData, color, monotone, verbose):
     ExperimentContigenceTable = getContingencyTables(intX, intY, base_x, base_y)
     ObservationContigenceTable = getContingencyTables(obsX, obsY, base_x, base_y)
 
@@ -163,7 +199,7 @@ def testModelFromXtoY(base_x: int, base_y: int, obsX, obsY, intX, intY, drawObsD
         WriteContingencyTable(ObservationContigenceTable, base_x, base_y)
         WriteContingencyTable(ExperimentContigenceTable, base_x, base_y)
 
-    return approximateToCausalModel(base_x, base_y, ObservationContigenceTable, ExperimentContigenceTable, drawObsData, color, verbose)
+    return approximateToCausalModel(base_x, base_y, ObservationContigenceTable, ExperimentContigenceTable, drawObsData, color, monotone, verbose)
 
 
 def localError(P_nom, P_denom, S):
@@ -305,7 +341,7 @@ def calc_variations(observation_contingence_table, sort_col, base_x, base_y):
 
 def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
     error_gap = dict()
-    pn_error = dict()
+    pns = dict()
     result = dict()
     for sort_col in ['X', 'Y']:
         obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base_x, base_y)
@@ -317,36 +353,51 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
         result['statistics'+sort_col]['intX_var'] = intX.var()
         result['statistics'+sort_col]['intY_var'] = intY.var()
         #init_points()
-        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", verbose)
-        modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", verbose)
+        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", params['monotone'], verbose)
+        modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", params['monotone'], verbose)
+        #print("PN: " + str(modelXtoY['PN']) + " " + str(modelYtoX['PN']))
+        #print("PS: " + str(modelXtoY['PS']) + " " + str(modelYtoX['PS']))
+        #print("PNS: " + str(modelXtoY['PNS']) + " " + str(modelYtoX['PNS']))
+
         errorXtoY = calcError(modelXtoY)
+        PNSXtoY = modelXtoY['PNS']
+        if verbose: print("total Error X -> Y: " + str(errorXtoY))
+
         if verbose: print("total Error X -> Y: " + str(errorXtoY))
         errorYtoX = calcError(modelYtoX)
+        PNSYtoX = modelYtoX['PNS']
         if verbose: print("total Error Y -> X: " + str(errorYtoX))
-        if errorXtoY < errorYtoX:
-            if verbose: print("X -> Y")
-            res = "X->Y"
-        elif errorXtoY > errorYtoX:
-            if verbose: print("Y -> X")
-            res = "Y->X"
+
+        if verbose: print("total Error Y -> X: " + str(errorYtoX))
+        if params['monotone']:
+            if PNSXtoY > PNSYtoX:
+                res = "X->Y"
+            elif PNSXtoY < PNSYtoX:
+                res = "Y->X"
+            else:
+                res = "no decision"
         else:
-            if verbose: print("no decision")
-            res = "no decision"
+            if errorXtoY < errorYtoX:
+                if verbose: print("X -> Y")
+                res = "X->Y"
+            elif errorXtoY > errorYtoX:
+                if verbose: print("Y -> X")
+                res = "Y->X"
+            else:
+                if verbose: print("no decision")
+                res = "no decision"
         result[sort_col] = res
-        #pn_error[sort_col] = min(errorYtoX, errorXtoY)
         error_gap[sort_col] = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
 
-    # if pn_error['X'] < pn_error['Y']:
-    #     return result['X']
-    # else:
-    #     return result['Y']
-
-    if error_gap['X'] == 1 and error_gap['Y'] == 1:
-        return "no decision", result['statisticsY']
-    elif (1 / error_gap['X']) < (1 / error_gap['Y']):
-        return result['Y'], result['statisticsY']
-    else:
+    if params['monotone']:
         return result['X'], result['statisticsX']
+    else:
+        if error_gap['X'] == 1 and error_gap['Y'] == 1:
+            return "no decision", result['statisticsY']
+        elif (1 / error_gap['X']) < (1 / error_gap['Y']):
+            return result['Y'], result['statisticsY']
+        else:
+            return result['X'], result['statisticsX']
 
     # for color in ['black', 'green', 'yellow', 'red']:
     #    ax.scatter(scatter_points[color]['x'], scatter_points[color]['y'], scatter_points[color]['z'], color=color, linewidth=1, s=2)

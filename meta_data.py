@@ -5,7 +5,7 @@ import numpy as np
 from utils import insert, flatten, count_char
 
 
-def setup_meta_data(base, nb_variables):
+def setup_meta_data(base, nb_variables, monotone_incr=False, monotone_decr=False):
     meta_data = dict()
     size_prob = pow(base, nb_variables)
     meta_data['base_x'] = base
@@ -19,6 +19,12 @@ def setup_meta_data(base, nb_variables):
     meta_data['B'] = np.array([[1] * size_prob] + lines)
 
     zero_codes = get_zero_codes(pattern_data[base]['zero_code_patterns'], base)
+    if monotone_decr:
+        zero_codes.append('0001')
+        zero_codes.append('1101')
+    if monotone_incr:
+        zero_codes.append('0110')
+        zero_codes.append('1010')
     meta_data['S_codes'] = s_codes(zero_codes, base, nb_variables)
     d_list = list()
     for i in range(0, size_prob):

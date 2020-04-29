@@ -1,88 +1,12 @@
 import os
 import numpy as np
 import pandas as pd
-from iacm import calcError, testModelFromXtoY, iacm, preprocessing, calc_variations
+from iacm import iacm
 from igci import igci
-from data_preparation import read_data, getContingencyTables
+from data_preparation import read_data
 from plot import plot_distributions
 from data_generation import generate_nonlinear_data, generate_nonlinear_discrete_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data, generate_linear_discrete_data
-from hypergraph_projection import testIndpendentendModel
 from sklearn.preprocessing import StandardScaler, RobustScaler
-
-
-def run_trials():
-    correct = 0
-    not_correct = 0
-    do_not_know = 0
-    ind = 0
-    number_trials = 100
-    max_samples = 100
-
-    for k in range(number_trials):
-        print("trial " + str(k))
-        obsX, obsY, intX, intY = generate_nonlinear_data(max_samples)
-        modelXtoY = testModelFromXtoY(obsX, obsY, intX, intY, True, "green")
-        modelYtoX = testModelFromXtoY(obsY, obsX, intY, intX, False, "yellow")
-        indX_Y = testIndpendentendModel(obsX, obsY, intX, intY, "red")
-        indY_X = testIndpendentendModel(obsY, obsX, intY, intX, "")
-        errorXtoY = calcError(modelXtoY)
-        print("total Error X -> Y: " + str(errorXtoY))
-        print("local Error X -> Y: " + str(modelXtoY['LocalErrorB']))
-        errorYtoX = calcError(modelYtoX)
-        print("total Error Y -> X: " + str(errorYtoX))
-        print("local Error X -> Y: " + str(modelYtoX['LocalErrorB']))
-        print("error X, Y: " + str(indX_Y))
-        print("error X, Y: " + str(indY_X))
-
-        if indX_Y is None:
-            indX_Y = 100000000.0
-
-        min_model_error = min(errorXtoY, errorYtoX)
-        if min_model_error < indX_Y:
-            if errorXtoY < errorYtoX:
-                print("X -> Y")
-                correct = correct + 1
-            elif errorXtoY > errorYtoX:
-                print("Y -> X")
-                not_correct = not_correct + 1
-            else:
-                print("no decision")
-                do_not_know = do_not_know + 1
-        else:
-            print("independent")
-            ind = ind + 1
-
-        # if errorXtoY != None and errorYtoX != None:
-        #     error_diff = abs(errorXtoY - errorYtoX)
-        #     if error_diff < 1.0:
-        #         if indX_Y < min(errorXtoY, errorYtoX):
-        #             print("independent")
-        #             ind = ind + 1
-        #         else:
-        #             print("no decision")
-        #             do_not_know = do_not_know + 1
-        #     else:
-        #         if errorXtoY < errorYtoX:
-        #             print("X -> Y")
-        #             correct = correct + 1
-        #         elif errorXtoY > errorYtoX:
-        #             print("Y -> X")
-        #             not_correct = not_correct + 1
-        #         else:
-        #             print("no decision")
-        #             do_not_know = do_not_know + 1
-        # else:
-        #     print("no decision")
-        #     do_not_know = do_not_know + 1
-
-    print("X->Y: " + str(correct) + "; " + str(correct / number_trials * 100.0) + " %")
-    print("Y->X: " + str(not_correct) + "; " + str(not_correct / number_trials * 100.0) + " %")
-    if not_correct > 0:
-        print("ratio: " + str(correct / float(not_correct)))
-    print("independent: " + str(ind) + "; " + str(ind / number_trials * 100.0) + " %")
-    print("do not know: " + str(do_not_know) + "; " + str(do_not_know / number_trials * 100.0) + " %")
-
-    plot_distributions()
 
 
 def print_statisticts(statistics):
@@ -105,27 +29,31 @@ params = {2: {'bins': 2,
               'y_shift': 0,
               'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3},
+              'prob_threshold_no_cluster': 0.3,
+              'monotone': True},
           3: {'bins': 14,
               'x_shift': 0,
               'y_shift': 0,
               'nb_cluster': 3,
               'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3
+              'prob_threshold_no_cluster': 0.3,
+              'monotone': False
               },
           4: {'bins': 9,
               'x_shift': 0,
               'y_shift': 0,
               'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3
+              'prob_threshold_no_cluster': 0.3,
+              'monotone': False
               },
           5: {'bins': 2,
               'x_shift': 0,
               'y_shift': 0,
               'nb_cluster': 2,
               'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3
+              'prob_threshold_no_cluster': 0.3,
+              'monotone': False
               }
           }
 
@@ -204,7 +132,7 @@ def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, para
         if "_des" not in file:
             try:
                 some_method_succeeded = False
-                #file = "pair0010.txt"
+                #file = "pair0043.txt"
                 data = read_data(directory, file)
                 if simulated_data:
                     ground_truth = "X->Y"
@@ -227,7 +155,9 @@ def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, para
                     params[base_x]['preprocess_method'] = preprocess_method
                     if verbose: print(preprocess_method)
                     preprocessing_stat[file][preprocess_method] = dict()
+                    #print(ground_truth)
                     res, stats = iacm(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose)
+                    #print(res)
                     #plot_distributions()
                     if ground_truth == res:
                         statistics['iacm_' + preprocess_method]['correct'] = statistics['iacm_' + preprocess_method][
@@ -282,7 +212,7 @@ if __name__ == '__main__':
     max_samples = 100
     size_alphabet = 3
     #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
-    for bins in range(2, 11):
+    for bins in range(16, 25):
         for clt in range(2,4):
             params[2]['bins'] = bins
             params[2]['nb_cluster'] = clt
