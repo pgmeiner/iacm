@@ -4,6 +4,7 @@ import pandas as pd
 from iacm import iacm
 from igci import igci
 from data_preparation import read_data
+from scipy.stats import spearmanr, kendalltau
 from plot import plot_distributions
 from data_generation import generate_nonlinear_data, generate_nonlinear_discrete_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data, generate_linear_discrete_data
 from sklearn.preprocessing import StandardScaler, RobustScaler
@@ -150,6 +151,12 @@ def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, para
                     statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + 1
                     statistics['igci']['not_correct_examples'].append(file)
 
+                stat_s, p_s = spearmanr(data['X'], data['Y'])
+                if abs(stat_s) >= 0.7 and p_s <= 0.01:
+                    params[base_x]['monotone'] = True
+                else:
+                    params[base_x]['monotone'] = False
+
                 preprocessing_stat[file] = dict()
                 for preprocess_method in ['none', 'split_discrete', 'discrete_split', 'discrete_cluster', 'cluster_discrete', 'new_strategy']:
                     params[base_x]['preprocess_method'] = preprocess_method
@@ -212,7 +219,7 @@ if __name__ == '__main__':
     max_samples = 100
     size_alphabet = 3
     #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
-    for bins in range(16, 25):
+    for bins in range(12, 25):
         for clt in range(2,4):
             params[2]['bins'] = bins
             params[2]['nb_cluster'] = clt

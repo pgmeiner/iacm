@@ -105,16 +105,17 @@ def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable,
 
 def calculate_causal_prob(NP, increase):
     pxy = NP['1100'] + NP['1101'] + NP['1110'] + NP['1111']
+    pxny = NP['1000'] + NP['1001'] + NP['1010'] + NP['1011']
     pnxy = NP['0100'] + NP['0101'] + NP['0110'] + NP['0111']
     pnxny = NP['0000'] + NP['0001'] + NP['0010'] + NP['0011']
     py = pxy + pnxy
     py_x = NP['0001'] + NP['0011'] + NP['0101'] + NP['0111'] + NP['1001'] + NP['1011'] + NP['1101'] + NP['1111']
     py_nx = NP['0010'] + NP['0011'] + NP['0110'] + NP['0111'] + NP['1010'] + NP['1011'] + NP['1110'] + NP['1111']
-    PN, PS, PNS = get_causal_prob_monotony(py=py, pxy=pxy, pnxny=pnxny, py_x=py_x, py_nx=py_nx, increase=increase)
+    PN, PS, PNS = get_causal_prob_monotony(py=py, pxy=pxy, pnxy=pnxy, pxny=pxny, pnxny=pnxny, py_x=py_x, py_nx=py_nx, increase=increase)
     return PN, PS, PNS
 
 
-def get_causal_prob_monotony(py, pxy, pnxny, py_x, py_nx, increase):
+def get_causal_prob_monotony(py, pxy, pnxy, pxny, pnxny, py_x, py_nx, increase):
     if increase:
         PNS = py_x - py_nx
         if pxy > 0:
@@ -127,12 +128,16 @@ def get_causal_prob_monotony(py, pxy, pnxny, py_x, py_nx, increase):
             PS = 0
     else:
         PNS = py_nx - py_x
-        if pxy > 0:
-            PN = (py - py_nx) / pxy
+        if pnxy > 0:
+            pny = 1 - py
+            pny_x = 1 - py_x
+            PN = (pny_x - pny) / pnxy
         else:
             PN = 0
-        if pnxny > 0:
-            PS = (py_x - py) / pnxny
+        if pxny > 0:
+            pny = 1 - py
+            pny_nx = 1 - py_nx
+            PS = (pny - pny_nx) / pxny
         else:
             PS = 0
 
@@ -343,6 +348,7 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
     error_gap = dict()
     pns = dict()
     result = dict()
+    monotone = params['monotone']
     for sort_col in ['X', 'Y']:
         obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base_x, base_y)
         result['statistics'+sort_col] = dict()
@@ -353,23 +359,24 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
         result['statistics'+sort_col]['intX_var'] = intX.var()
         result['statistics'+sort_col]['intY_var'] = intY.var()
         #init_points()
-        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", params['monotone'], verbose)
-        modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", params['monotone'], verbose)
+        modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", monotone, verbose)
+        modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", monotone, verbose)
         #print("PN: " + str(modelXtoY['PN']) + " " + str(modelYtoX['PN']))
         #print("PS: " + str(modelXtoY['PS']) + " " + str(modelYtoX['PS']))
         #print("PNS: " + str(modelXtoY['PNS']) + " " + str(modelYtoX['PNS']))
 
         errorXtoY = calcError(modelXtoY)
-        PNSXtoY = modelXtoY['PNS']
+
         if verbose: print("total Error X -> Y: " + str(errorXtoY))
 
         if verbose: print("total Error X -> Y: " + str(errorXtoY))
         errorYtoX = calcError(modelYtoX)
-        PNSYtoX = modelYtoX['PNS']
         if verbose: print("total Error Y -> X: " + str(errorYtoX))
 
         if verbose: print("total Error Y -> X: " + str(errorYtoX))
-        if params['monotone']:
+        if monotone:
+            PNSXtoY = modelXtoY['PNS']
+            PNSYtoX = modelYtoX['PNS']
             if PNSXtoY > PNSYtoX:
                 res = "X->Y"
             elif PNSXtoY < PNSYtoX:
@@ -389,7 +396,7 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
         result[sort_col] = res
         error_gap[sort_col] = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
 
-    if params['monotone']:
+    if monotone:
         return result['X'], result['statisticsX']
     else:
         if error_gap['X'] == 1 and error_gap['Y'] == 1:
