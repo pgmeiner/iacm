@@ -133,7 +133,7 @@ def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, para
         if "_des" not in file:
             try:
                 some_method_succeeded = False
-                #file = "pair0043.txt"
+                #file = "pair0080.txt"
                 data = read_data(directory, file)
                 if simulated_data:
                     ground_truth = "X->Y"

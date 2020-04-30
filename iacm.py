@@ -346,7 +346,6 @@ def calc_variations(observation_contingence_table, sort_col, base_x, base_y):
 
 def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
     error_gap = dict()
-    pns = dict()
     result = dict()
     monotone = params['monotone']
     for sort_col in ['X', 'Y']:
@@ -361,26 +360,21 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
         #init_points()
         modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", monotone, verbose)
         modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", monotone, verbose)
-        #print("PN: " + str(modelXtoY['PN']) + " " + str(modelYtoX['PN']))
-        #print("PS: " + str(modelXtoY['PS']) + " " + str(modelYtoX['PS']))
-        #print("PNS: " + str(modelXtoY['PNS']) + " " + str(modelYtoX['PNS']))
 
         errorXtoY = calcError(modelXtoY)
-
-        if verbose: print("total Error X -> Y: " + str(errorXtoY))
-
         if verbose: print("total Error X -> Y: " + str(errorXtoY))
         errorYtoX = calcError(modelYtoX)
         if verbose: print("total Error Y -> X: " + str(errorYtoX))
 
-        if verbose: print("total Error Y -> X: " + str(errorYtoX))
         if monotone:
             PNSXtoY = modelXtoY['PNS']
             PNSYtoX = modelYtoX['PNS']
             if PNSXtoY > PNSYtoX:
                 res = "X->Y"
+                result['monontone_prob' + sort_col] = PNSXtoY
             elif PNSXtoY < PNSYtoX:
                 res = "Y->X"
+                result['monontone_prob' + sort_col] = PNSYtoX
             else:
                 res = "no decision"
         else:
@@ -397,7 +391,16 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
         error_gap[sort_col] = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
 
     if monotone:
-        return result['X'], result['statisticsX']
+        if 'monontone_probX' not in result and 'monotone_probY' not in result:
+            return result['X'], result['statisticsX']
+        elif 'monontone_probX' not in result and 'monontone_probY' in result:
+            return result['Y'], result['statisticsY']
+        elif 'monontone_probX' in result and 'monontone_probY' not in result:
+            return result['X'], result['statisticsX']
+        elif result and (result['monontone_probX'] > result['monontone_probY']):
+            return result['X'], result['statisticsX']
+        else:
+            return result['Y'], result['statisticsY']
     else:
         if error_gap['X'] == 1 and error_gap['Y'] == 1:
             return "no decision", result['statisticsY']
