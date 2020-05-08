@@ -7,6 +7,7 @@ from data_preparation import get_probabilities, get_probabilities_intervention, 
 from meta_data import setup_meta_data, base_repr
 from plot import plot_distribution, plot_distributions, init_points, init_figure
 from typing import List
+from scipy.stats import chisquare
 
 meta_data = dict()
 meta_data['2_2'] = setup_meta_data(base=2, nb_variables=4)
@@ -66,7 +67,7 @@ def approximateToCausalModel(base_x: int, base_y: int, obsConTable, ExpConTable,
     constraint_data = get_constraint_data(base_x=base_x, base_y=base_y, list_of_distributions=constraint_distr)#Py_nx, Py_x, Pnxy, Pxny, Pxy])
 
     meta_data_idx = str(base_x) + '_' + str(base_y)
-    if monotone:
+    if monotone and base_x == 2 and base_y == 2:
         modeldata_mon_decr = FindBestApproximationToConsistentModel(constraint_data, meta_data[meta_data_idx + '_m_d'])
         modeldata_mon_incr = FindBestApproximationToConsistentModel(constraint_data, meta_data[meta_data_idx + '_m_i'])
 
@@ -227,6 +228,26 @@ def preprocessing(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int
     if params['preprocess_method'] == 'none':
         split_idx = int(data.shape[0] / 2)
         obsX, obsY, intX, intY = split_data_at_index(data, split_idx)
+    elif params['preprocess_method'] == 'auto':
+        result = dict()
+        for sort_col in ['X', 'Y']:
+            for method in ['split_discrete', 'discrete_split']:
+                tmp_params = params
+                tmp_params['preprocess_method'] = method
+                result[method + sort_col] = dict()
+                result[method + sort_col]['res'] = preprocessing(data, sort_col, tmp_params, base_x, base_y)
+                max_effect_range_X = effect_range(pd.concat([result[method + sort_col]['res'][0], result[method + sort_col]['res'][2]]))[2]
+                max_effect_range_Y = effect_range(pd.concat([result[method + sort_col]['res'][1], result[method + sort_col]['res'][3]]))[2]
+                result[method + sort_col]['crit'] = (effect_range(result[method + sort_col]['res'][0])[2]/max_effect_range_X + effect_range(result[method + sort_col]['res'][2])[2]/max_effect_range_X +
+                                          effect_range(result[method + sort_col]['res'][1])[2]/max_effect_range_Y + effect_range(result[method + sort_col]['res'][3])[2]/max_effect_range_Y)/4
+        min_crit = 1
+        best_method = 'split_discreteX'
+        for sort_col in ['X', 'Y']:
+            for method in ['split_discrete', 'discrete_split']:
+                if result[method + sort_col]['crit'] < min_crit:
+                    min_crit = result[method + sort_col]['crit']
+                    best_method = method + sort_col
+        obsX, obsY, intX, intY = result[best_method]['res']
     elif params['preprocess_method'] == 'discrete_split':
         disc_data = discretize_data(data, params)
         obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
@@ -235,6 +256,20 @@ def preprocessing(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int
         dataXY = pd.concat([pd.concat([obsX, intX]), pd.concat([obsY, intY])], axis=1)
         disc_data = discretize_data(dataXY, params)
         obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max)
+    elif params['preprocess_method'] == 'split_strategy':
+        disc_data = discretize_data(data, params)
+        obsX_ds, obsY_ds, intX_ds, intY_ds, i_max_ds = split_data(disc_data, sort_col)
+        I_sq_x_ds = calc_I_squared(obsX_ds)
+        obsX_sd, obsY_sd, intX_sd, intY_sd, i_max_sd = split_data(data, sort_col)
+        dataXY = pd.concat([pd.concat([obsX_sd, intX_sd]), pd.concat([obsY_sd, intY_sd])], axis=1)
+        disc_data = discretize_data(dataXY, params)
+        obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max_sd)
+        I_sq_x_sd = calc_I_squared(obsX)
+        if I_sq_x_ds > I_sq_x_sd:
+            obsX = obsX_ds
+            obsY = obsY_ds
+            intX = intX_ds
+            intY = intY_ds
     elif params['preprocess_method'] == 'cluster_discrete':
         (obsX, obsY, intX, intY), clustered_data = cluster_data(data, sort_col, params)
         disc_data = discretize_data(clustered_data, params)
@@ -283,6 +318,53 @@ def preprocessing(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int
                 obsY = cobsY
                 intX = cintX
                 intY = cintY
+
+    return obsX, obsY, intX, intY
+
+
+def preprocessing_for_timeseries(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int):
+    if params['preprocess_method'] == 'discrete_split':
+        disc_data = discretize_data(data, params)
+        obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col, sort_data=False)
+    elif params['preprocess_method'] == 'split_discrete' or params['preprocess_method'] == 'auto':
+        obsX, obsY, intX, intY, i_max = split_data(data, sort_col, sort_data=False)
+        dataXY = pd.concat([pd.concat([obsX, intX]), pd.concat([obsY, intY])], axis=1)
+        disc_data = discretize_data(dataXY, params)
+        obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max)
+    elif params['preprocess_method'] == 'cluster_discrete':
+        (obsX, obsY, intX, intY), clustered_data = cluster_data(data, sort_col, params)
+        disc_data = discretize_data(clustered_data, params)
+        disc_data['labels'] = clustered_data['labels']
+        obsX, obsY, intX, intY, i_max = split_data(disc_data, 'labels', sort_data=False)
+    elif params['preprocess_method'] == 'discrete_cluster':
+        disc_data = discretize_data(data, params)
+        (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
+        obsX, obsY, intX, intY, i_max = split_data(clustered_data, 'labels', sort_data=False)
+    elif params['preprocess_method'] == 'new_strategy':
+        disc_data = discretize_data(data, params)
+        obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col, sort_data=False)
+        mi_ds = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
+        obsX, obsY, intX, intY, i_max = split_data(data, sort_col, sort_data=False)
+        mi_s = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
+        disc_data = discretize_data(data, params)
+        (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
+        obsX, obsY, intX, intY, i_max = split_data(clustered_data, 'labels', sort_data=False)
+        mi_dc = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
+        if (mi_ds < min(mi_s,mi_dc)):
+            disc_data = discretize_data(data, params)
+            obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col, sort_data=False)
+        elif mi_s < min(mi_ds, mi_dc):
+            obsX, obsY, intX, intY, i_max = split_data(data, sort_col, sort_data=False)
+            dataXY = pd.concat([pd.concat([obsX, intX]), pd.concat([obsY, intY])], axis=1)
+            disc_data = discretize_data(dataXY, params)
+            obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max)
+        else:
+            disc_data = discretize_data(data, params)
+            (obsX, obsY, intX, intY), clustered_data = cluster_data(disc_data, sort_col, params)
+            obsX, obsY, intX, intY, i_max = split_data(clustered_data, 'labels', sort_data=False)
+    else: #params['preprocess_method'] == 'none':
+        split_idx = int(data.shape[0] / 2)
+        obsX, obsY, intX, intY = split_data_at_index(data, split_idx)
 
     return obsX, obsY, intX, intY
 
@@ -344,71 +426,166 @@ def calc_variations(observation_contingence_table, sort_col, base_x, base_y):
         return min([entropy([observation_contingence_table[j][i] for j in range(0,base_x)]) for i in range(0, base_y)])
 
 
+def calc_I_squared(data):
+    # measure for heterogeneity
+    stat, p = chisquare(data, axis=None)
+    dof = float(len(set(data.tolist())) - 1)
+    return (stat - dof) / stat
+
+
+def effect_range(data):
+    m = np.mean(data)
+    T = np.std(data)
+
+    return m-2*T, m+2*T, 4*T
+
+
+def iacm_auto(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
+    decision_crit = dict()
+    monotone = (params['monotone'] and base_x == 2 and base_y == 2)
+    method_set = ['split_discrete', 'discrete_split']
+    for method in method_set:
+        result = dict()
+        decision_crit[method] = dict()
+        for sort_col in ['X', 'Y']:
+            params['preprocess_method'] = method
+            obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base_x, base_y)
+            result['statistics' + sort_col] = dict()
+            max_effect_range_X = effect_range(pd.concat([obsX, intX]))[2]
+            max_effect_range_Y = effect_range(pd.concat([obsY, intY]))[2]
+            result['statistics' + sort_col]['obsX_eR'] = effect_range(obsX)[2] / max_effect_range_X
+            result['statistics' + sort_col]['obsY_eR'] = effect_range(obsY)[2] / max_effect_range_Y
+            result['statistics' + sort_col]['intX_eR'] = effect_range(intX)[2] / max_effect_range_X
+            result['statistics' + sort_col]['intY_eR'] = effect_range(intY)[2] / max_effect_range_Y
+            result['statistics' + sort_col]['eRavg'] = (result['statistics' + sort_col]['obsX_eR'] +
+                                                        result['statistics' + sort_col]['obsY_eR'] +
+                                                        result['statistics' + sort_col]['intX_eR'] +
+                                                        result['statistics' + sort_col]['intY_eR'])/4
+
+            modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", monotone, verbose)
+            modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", monotone, verbose)
+            result[sort_col] = decideBestModel(modelXtoY, modelYtoX, monotone, verbose)
+        decision, stat, error_ratio = getBestModel(result)
+        decision_crit[method]['eRavg'] = stat['eRavg']
+        decision_crit[method]['decision'] = decision
+        decision_crit[method]['stat'] = stat
+
+    best_crit = 2
+    best_method = "split_discrete"
+    for method in method_set:
+        if decision_crit[method]['eRavg'] < best_crit:
+            best_crit = decision_crit[method]['eRavg']
+            best_method = method
+
+    return decision_crit[best_method]['decision'], decision_crit[best_method]['stat'], best_crit
+
+
 def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
-    error_gap = dict()
     result = dict()
-    monotone = params['monotone']
+    monotone = (params['monotone'] and base_x == 2 and base_y == 2)
     for sort_col in ['X', 'Y']:
         obsX, obsY, intX, intY = preprocessing(data, sort_col, params, base_x, base_y)
         result['statistics'+sort_col] = dict()
-        result['statistics'+sort_col]['mi'] = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
-        result['statistics'+sort_col]['var'] = calc_variations(getContingencyTables(obsX, obsY, base_x, base_y), sort_col, base_x, base_y)
-        result['statistics'+sort_col]['obsX_var'] = obsX.var()
-        result['statistics'+sort_col]['obsY_var'] = obsY.var()
-        result['statistics'+sort_col]['intX_var'] = intX.var()
-        result['statistics'+sort_col]['intY_var'] = intY.var()
+        # result['statistics'+sort_col]['mi'] = mutual_information(getContingencyTables(obsX, obsY, base_x, base_y), base_x, base_y)
+        # result['statistics'+sort_col]['var'] = calc_variations(getContingencyTables(obsX, obsY, base_x, base_y), sort_col, base_x, base_y)
+        # result['statistics'+sort_col]['obsX_var'] = obsX.var()
+        # result['statistics'+sort_col]['obsY_var'] = obsY.var()
+        # result['statistics'+sort_col]['intX_var'] = intX.var()
+        # result['statistics'+sort_col]['intY_var'] = intY.var()
+        max_effect_range_X = effect_range(pd.concat([obsX, intX]))[2]
+        max_effect_range_Y = effect_range(pd.concat([obsY, intY]))[2]
+        result['statistics' + sort_col]['obsX_eR'] = effect_range(obsX)[2] / max_effect_range_X
+        result['statistics' + sort_col]['obsY_eR'] = effect_range(obsY)[2] / max_effect_range_Y
+        result['statistics' + sort_col]['intX_eR'] = effect_range(intX)[2] / max_effect_range_X
+        result['statistics' + sort_col]['intY_eR'] = effect_range(intY)[2] / max_effect_range_Y
+        result['statistics' + sort_col]['X_eR'] = (result['statistics' + sort_col]['obsX_eR'] + result['statistics' + sort_col]['intX_eR']) / 2
+        result['statistics' + sort_col]['Y_eR'] = (result['statistics' + sort_col]['obsY_eR'] + result['statistics' + sort_col]['intY_eR']) / 2
+        #print(str((result['statistics' + sort_col]['obsX_eR'] + result['statistics' + sort_col]['obsY_eR'] + result['statistics' + sort_col]['intX_eR'] + result['statistics' + sort_col]['intY_eR'])/4))
         #init_points()
         modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", monotone, verbose)
         modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", monotone, verbose)
+        result[sort_col] = decideBestModel(modelXtoY, modelYtoX, monotone, verbose)
 
-        errorXtoY = calcError(modelXtoY)
-        if verbose: print("total Error X -> Y: " + str(errorXtoY))
-        errorYtoX = calcError(modelYtoX)
-        if verbose: print("total Error Y -> X: " + str(errorYtoX))
-
-        if monotone:
-            PNSXtoY = modelXtoY['PNS']
-            PNSYtoX = modelYtoX['PNS']
-            if PNSXtoY > PNSYtoX:
-                res = "X->Y"
-                result['monontone_prob' + sort_col] = PNSXtoY
-            elif PNSXtoY < PNSYtoX:
-                res = "Y->X"
-                result['monontone_prob' + sort_col] = PNSYtoX
-            else:
-                res = "no decision"
-        else:
-            if errorXtoY < errorYtoX:
-                if verbose: print("X -> Y")
-                res = "X->Y"
-            elif errorXtoY > errorYtoX:
-                if verbose: print("Y -> X")
-                res = "Y->X"
-            else:
-                if verbose: print("no decision")
-                res = "no decision"
-        result[sort_col] = res
-        error_gap[sort_col] = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
-
-    if monotone:
-        if 'monontone_probX' not in result and 'monotone_probY' not in result:
-            return result['X'], result['statisticsX']
-        elif 'monontone_probX' not in result and 'monontone_probY' in result:
-            return result['Y'], result['statisticsY']
-        elif 'monontone_probX' in result and 'monontone_probY' not in result:
-            return result['X'], result['statisticsX']
-        elif result and (result['monontone_probX'] > result['monontone_probY']):
-            return result['X'], result['statisticsX']
-        else:
-            return result['Y'], result['statisticsY']
-    else:
-        if error_gap['X'] == 1 and error_gap['Y'] == 1:
-            return "no decision", result['statisticsY']
-        elif (1 / error_gap['X']) < (1 / error_gap['Y']):
-            return result['Y'], result['statisticsY']
-        else:
-            return result['X'], result['statisticsX']
+    return getBestModel(result)
 
     # for color in ['black', 'green', 'yellow', 'red']:
     #    ax.scatter(scatter_points[color]['x'], scatter_points[color]['y'], scatter_points[color]['z'], color=color, linewidth=1, s=2)
     # plt.show()
+
+
+def getBestModel(result):
+    if result['X']['error_ratio'] == 1 and result['Y']['error_ratio'] == 1:
+        return "no decision", result['statisticsY'], 1
+    elif (1 / result['X']['error_ratio']) < (1 / result['Y']['error_ratio']):
+        return result['Y']['result'], result['statisticsY'], result['Y']['error_ratio']
+    else:
+        return result['X']['result'], result['statisticsX'], result['X']['error_ratio']
+
+
+def decideBestModel(modelXtoY, modelYtoX, monotone, verbose, tolerance=1.0e-05):
+    bestModel = dict()
+    errorXtoY = calcError(modelXtoY)
+    if verbose: print("total Error X -> Y: " + str(errorXtoY))
+    errorYtoX = calcError(modelYtoX)
+    if verbose: print("total Error Y -> X: " + str(errorYtoX))
+
+    if abs(errorXtoY - errorYtoX) < 0.01:
+        if monotone:
+            PNSXtoY = modelXtoY['PNS']
+            PNSYtoX = modelYtoX['PNS']
+            if abs(PNSXtoY-PNSYtoX) < tolerance:
+                res = "no decision"
+                error_ratio = 1
+            elif PNSXtoY > PNSYtoX:
+                res = "X->Y"
+                error_ratio = abs(PNSXtoY - PNSYtoX)
+            else:
+                res = "Y->X"
+                error_ratio = abs(PNSXtoY - PNSYtoX)
+        else:
+            res = "no decision"
+            error_ratio = 1
+    elif errorXtoY < errorYtoX:
+        if verbose: print("X -> Y")
+        res = "X->Y"
+        error_ratio = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
+    else: # errorXtoY > errorYtoX:
+        if verbose: print("Y -> X")
+        res = "Y->X"
+        error_ratio = min(errorXtoY, errorYtoX) / max(errorXtoY, errorYtoX)
+
+    bestModel['result'] = res
+    bestModel['error_ratio'] = error_ratio
+    return bestModel
+
+
+def iacm_timeseries(base_x: int, base_y: int, data: pd.DataFrame, params, max_lag, verbose):
+    result = dict()
+    timesseries_result = dict()
+    monotone = params['monotone']
+    T = data.shape[0]
+    tmp_data = data.copy()
+    for lag in range(0, max_lag):
+        tmp_data['X'] = data['X'][:T - lag]
+        tmp_data['Y'] = data['Y'][lag:]
+        tmp_data = tmp_data.dropna()
+        for sort_col in ['X', 'Y']:
+            obsX, obsY, intX, intY = preprocessing_for_timeseries(tmp_data, sort_col, params, base_x, base_y)
+            modelXtoY = testModelFromXtoY(base_x, base_y, obsX, obsY, intX, intY, False, "green", monotone, verbose)
+            modelYtoX = testModelFromXtoY(base_x, base_y, obsY, obsX, intY, intX, False, "yellow", monotone, verbose)
+            result['statistics' + sort_col] = dict()
+            result[sort_col] = decideBestModel(modelXtoY, modelYtoX, monotone, verbose)
+
+        timesseries_result[lag] = dict()
+        res, stat, crit = getBestModel(result)
+        timesseries_result[lag]['result'] = res
+        timesseries_result[lag]['crit'] = crit
+
+    min_crit = 1
+    best_res = "no decision"
+    for lag, res_dict in timesseries_result.items():
+        if "no decision" not in res_dict['result'] and res_dict['crit'] < min_crit:
+            min_crit = res_dict['crit']
+            best_res = res_dict['result']
+
+    return best_res

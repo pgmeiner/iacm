@@ -175,22 +175,29 @@ def split_at_clustered_labels(data, col_to_prepare, params):
          # else:
          #     return data[data['labels'] == 1]['X'], data[data['labels'] == 1]['Y'], data[data['labels'] == 0]['X'], data[data['labels'] == 0]['Y']
 
-def split_data(data, col_to_prepare):
-    sorted_data = data.sort_values(by=[col_to_prepare]).reset_index()
+
+def split_data(data, col_to_prepare, sort_data=True):
+    if sort_data:
+        prep_data = data.sort_values(by=[col_to_prepare]).reset_index()
+    else:
+        prep_data = data
     # find splitting point
     max_diff = 0
     i_max = 0
-    for i in range(int(0.2 * sorted_data.shape[0]), int(0.7 * sorted_data.shape[0])):
-        if abs(sorted_data[col_to_prepare][i - 1] - sorted_data[col_to_prepare][i]) > max_diff:
-            max_diff = abs(sorted_data[col_to_prepare][i - 1] - sorted_data[col_to_prepare][i])
+    # find splitting range
+    alphabet_size = len(set(prep_data[col_to_prepare].tolist()))
+    upper_range = int(0.7*prep_data.shape[0])
+    for i in range(int(0.7*prep_data.shape[0]),prep_data.shape[0]):
+        if len(set(prep_data[col_to_prepare][:i].tolist())) > int(alphabet_size*0.4):
+            upper_range = i
+            break
+
+    for i in range(int(0.2 * prep_data.shape[0]), upper_range):
+        if abs(prep_data[col_to_prepare][i - 1] - prep_data[col_to_prepare][i]) > max_diff:
+            max_diff = abs(prep_data[col_to_prepare][i - 1] - prep_data[col_to_prepare][i])
             i_max = i
-    #i_max = 100
-    return sorted_data['X'][0:i_max], sorted_data['Y'][0:i_max], sorted_data['X'][i_max:], sorted_data['Y'][i_max:], i_max
-    #i_max = int(0.4 * sorted_data.shape[0])
-    #return pd.concat([data['X'][0:i_max], data['X'][(data.shape[0] - i_max):]],ignore_index=True), \
-    #       pd.concat([data['Y'][0:i_max], data['Y'][(data.shape[0] - i_max):]], ignore_index=True), \
-    #       data['X'][i_max:(data.shape[0] - i_max)], \
-    #       data['Y'][i_max:(data.shape[0] - i_max)]
+    return prep_data['X'][0:i_max], prep_data['Y'][0:i_max], prep_data['X'][i_max:], prep_data['Y'][i_max:], i_max
+
 
 def split_data_at_index(data, idx):
     return data['X'][0:idx], data['Y'][0:idx], data['X'][idx:], data['Y'][idx:]

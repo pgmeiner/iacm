@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-from iacm import iacm
+from iacm import iacm, iacm_timeseries, iacm_auto
 from igci import igci
 from data_preparation import read_data
 from scipy.stats import spearmanr, kendalltau
@@ -32,13 +32,13 @@ params = {2: {'bins': 2,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3,
               'monotone': True},
-          3: {'bins': 14,
+          3: {'bins': 2,
               'x_shift': 0,
               'y_shift': 0,
               'nb_cluster': 3,
               'prob_threshold_cluster': 0.7,
               'prob_threshold_no_cluster': 0.3,
-              'monotone': False
+              'monotone': True
               },
           4: {'bins': 9,
               'x_shift': 0,
@@ -69,14 +69,14 @@ def get_ground_truth(content):
 def get_stat_entry(data):
     total_number = data['correct'] + data['not_correct'] + data['no_decision']
     if total_number > 0:
-        return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(data['correct']) + "/" + str(total_number) + ")"
+        return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(data['correct']) + "," + str(data['not_correct']) + "," + str(data['no_decision']) + "/" + str(total_number) + ")"
     else:
         return ""
 
 def print_for_evaluation(statistics, size_alphabet, params, base):
     print(str(size_alphabet) + ";" +
           get_stat_entry(statistics['igci']) + ";" +
-          get_stat_entry(statistics['iacm_none']) + ";" +
+          get_stat_entry(statistics['iacm_auto']) + ";" +
           get_stat_entry(statistics['iacm_split_discrete']) + ";" +
           get_stat_entry(statistics['iacm_discrete_split']) + ";" +
           get_stat_entry(statistics['iacm_discrete_cluster']) + ";" +
@@ -102,19 +102,23 @@ def run_simulations(structure, max_samples, size_alphabet, nr_simulations):
 
 
 def print_for_preprocess_evaluation(preprocessing_stat):
-    for k, v in preprocessing_stat.items():
-        res_str = str(k)
+    print("file;method;correct;obsX_eR_sq;obsY_eR_sq;intX_eR_sq;intY_eR_sq;X_eR_sq;Y_eR_sq")
+    for file, v in preprocessing_stat.items():
+        res_str = str(file)
         for method, element in v.items():
             res_str = res_str + ";" + method
             for stat_k, stat_v in element.items():
                 res_str = res_str + ";" + str(round(stat_v,3))
-        if len(v.items()) > 0:
             print(res_str)
+            res_str = str(file)
+
+
+timeseries_files = ['pair0042.txt', 'pair0068.txt', 'pair0069.txt', 'pair0077.txt', 'pair0094.txt', 'pair0095.txt']
 
 
 def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, params):
-    statistics = {'igci': dict(), 'iacm_none': dict(), 'iacm_discrete_split': dict(), 'iacm_split_discrete': dict(),
-                  'iacm_cluster_discrete': dict(),
+    statistics = {'igci': dict(), 'iacm_none': dict(), 'iacm_auto': dict(), 'iacm_discrete_split': dict(), 'iacm_split_discrete': dict(),
+                  'iacm_cluster_discrete': dict(), 'iacm_split_strategy': dict(),
                   'iacm_discrete_cluster': dict(), 'iacm_alternativ': dict(), 'iacm_theoretic_coverage': dict(),
                   'iacm_new_strategy': dict()}
     preprocessing_stat = dict()
@@ -133,7 +137,7 @@ def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, para
         if "_des" not in file:
             try:
                 some_method_succeeded = False
-                #file = "pair0080.txt"
+                #file = "pair0008.txt"
                 data = read_data(directory, file)
                 if simulated_data:
                     ground_truth = "X->Y"
@@ -158,12 +162,17 @@ def run_inference(simulated_data, structure, size_alphabet, base_x, base_y, para
                     params[base_x]['monotone'] = False
 
                 preprocessing_stat[file] = dict()
-                for preprocess_method in ['none', 'split_discrete', 'discrete_split', 'discrete_cluster', 'cluster_discrete', 'new_strategy']:
+                for preprocess_method in ['auto']: #, 'split_discrete', 'discrete_split', 'discrete_cluster', 'cluster_discrete', 'new_strategy']:
                     params[base_x]['preprocess_method'] = preprocess_method
                     if verbose: print(preprocess_method)
                     preprocessing_stat[file][preprocess_method] = dict()
                     #print(ground_truth)
-                    res, stats = iacm(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose)
+                    if file in timeseries_files:
+                        res = iacm_timeseries(base_x=base_x, base_y=base_y, data=data, params=params[base_x], max_lag=10, verbose=verbose)
+                        stats = dict()
+                    else:
+                        res, stats, crit = iacm_auto(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose)
+
                     #print(res)
                     #plot_distributions()
                     if ground_truth == res:
@@ -219,8 +228,8 @@ if __name__ == '__main__':
     max_samples = 100
     size_alphabet = 3
     #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
-    for bins in range(12, 25):
-        for clt in range(2,4):
+    for bins in range(2, 25):
+        for clt in range(2,3):
             params[2]['bins'] = bins
             params[2]['nb_cluster'] = clt
             run_inference(simulated_data=False, structure=structure, size_alphabet=size_alphabet, base_x=2, base_y=2, params=params)
