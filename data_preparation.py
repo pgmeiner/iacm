@@ -18,6 +18,17 @@ def read_data(directory, filename: str) -> pd.DataFrame:
     return data
 
 
+def read_synthetic_data(directory, filename: str) -> pd.DataFrame:
+    lines = open(directory + '/' + filename).readlines()
+    X = list()
+    Y = list()
+    for line in lines:
+        X.append(float(" ".join(line.lstrip().split()).split()[0]))
+        Y.append(float(" ".join(line.lstrip().split()).split()[1]))
+
+    return pd.DataFrame({'X': X, 'Y': Y})
+
+
 def getContingencyTables(X, Y, base_x: int, base_y: int):
     # ctable[x][y]
     ctable = [[1] * base_x for _ in range(0, base_y)]
