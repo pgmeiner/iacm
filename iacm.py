@@ -3,7 +3,7 @@ import numpy as np
 from math import log2
 import pandas as pd
 from data_preparation import get_probabilities, get_probabilities_intervention, WriteContingencyTable, \
-    getContingencyTables, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels
+    getContingencyTables, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels, split_with_equal_std
 from meta_data import setup_meta_data, base_repr
 from plot import plot_distribution, plot_distributions, init_points, init_figure
 from typing import List
@@ -250,10 +250,11 @@ def preprocessing(data: pd.DataFrame, sort_col, params, base_x: int, base_y: int
         obsX, obsY, intX, intY = result[best_method]['res']
     elif params['preprocess_method'] == 'discrete_split':
         disc_data = discretize_data(data, params)
-        obsX, obsY, intX, intY, i_max = split_data(disc_data, sort_col)
+        obsX, obsY, intX, intY, i_max = split_with_equal_std(disc_data, sort_col)
     elif params['preprocess_method'] == 'split_discrete':
-        obsX, obsY, intX, intY, i_max = split_data(data, sort_col)
+        obsX, obsY, intX, intY, i_max = split_with_equal_std(data, sort_col)
         dataXY = pd.concat([pd.concat([obsX, intX]), pd.concat([obsY, intY])], axis=1)
+        dataXY.columns= ['X', 'Y']
         disc_data = discretize_data(dataXY, params)
         obsX, obsY, intX, intY = split_data_at_index(disc_data, i_max)
     elif params['preprocess_method'] == 'split_strategy':
@@ -515,11 +516,11 @@ def iacm(base_x: int, base_y: int, data: pd.DataFrame, params, verbose):
 
 def getBestModel(result):
     if result['X']['error_ratio'] == 1 and result['Y']['error_ratio'] == 1:
-        return "no decision", result['statisticsY'], 1
+        return "no decision", result['statisticsY'], 0
     elif (1 / result['X']['error_ratio']) < (1 / result['Y']['error_ratio']):
-        return result['Y']['result'], result['statisticsY'], result['Y']['error_ratio']
+        return result['Y']['result'], result['statisticsY'], result['Y']['min_error']
     else:
-        return result['X']['result'], result['statisticsX'], result['X']['error_ratio']
+        return result['X']['result'], result['statisticsX'], result['X']['min_error']
 
 
 def decideBestModel(modelXtoY, modelYtoX, monotone, verbose, tolerance=1.0e-05):
@@ -556,6 +557,7 @@ def decideBestModel(modelXtoY, modelYtoX, monotone, verbose, tolerance=1.0e-05):
 
     bestModel['result'] = res
     bestModel['error_ratio'] = error_ratio
+    bestModel['min_error'] = min(errorXtoY, errorYtoX)
     return bestModel
 
 

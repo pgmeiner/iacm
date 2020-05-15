@@ -4,6 +4,7 @@ library(glmnet)
 library(InvariantCausalPrediction)
 library(nonlinearICP)
 library(gptk)
+library(HCR)
 
 # run RESIT with Tübingen CEP
 # Get the working directory
@@ -52,7 +53,7 @@ not_correct = 0
 no_decision = 0
 simulation = TRUE
 if (simulation == TRUE) {
-  directory = "../simulations/nonlinear_discrete/3/"
+  directory = "../simulations/nonlinear_discrete/100_100/"
 } else {
   directory = "../pairs/"
 }
@@ -60,7 +61,7 @@ for (file in list.files(file.path(wd, directory))) {
   if ((simulation == FALSE & in_str("pair0", file) & in_str("_des", file) == FALSE) | (simulation == TRUE)) {
     result = tryCatch({
       print(file)
-      #file="pair2.csv"
+      #file="pair0002.txt"
       
       ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=" ", header=FALSE)
       names(ce_pair_data) = c('X', 'Y')
@@ -71,7 +72,15 @@ for (file in list.files(file.path(wd, directory))) {
       } else {
         ce_pair_desc <- tolower(readLines(file.path(wd, gsub(".txt", "_des.txt", paste("../pairs/",file, sep="")))))
       }
-      
+      r1 <- HCR(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], is_anm=TRUE)
+      r2 <- HCR(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], is_anm=TRUE)
+      res_ = "no_decision"
+      if (r1$score > r2$score) {
+        res_ = "x->y"
+      } else if (r1$score < r2$score) {
+        res_ = "y->x"
+      }
+      r2$score
       #res <- ICML(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), model = train_gp, indtest = indtestHsic, output = FALSE)
       #res <- GDS(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), "SEMIND", pars, check = "checkUntilFirst", output = FALSE, kvec = c(10000), startAt = "emptyGraph")$Adj
       #res <- lingamWrap(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']))$Adj
@@ -90,14 +99,13 @@ for (file in list.files(file.path(wd, directory))) {
        #     res_ = "y->x"
        #   }
        # }
-        
-      res_ = "no_decision"
-      if (res[1,2] == 1) {
-       res_ = "x->y"
-      }
-      if (res[2,1] == 1) {
-       res_ = "y->x"
-      }
+      
+#      if (res[1,2] == 1) {
+#       res_ = "x->y"
+#      }
+#      if (res[2,1] == 1) {
+#       res_ = "y->x"
+#      }
       #Timino_res = timino_pairwise(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], alpha = 0.05, max_lag = 2, instant=1, model=traints_gam, indtest = indtestts_crosscov)
       #anm_res = ANM(ce_pair_data, train_GAMboost)
       if (res_ == "no_decision") {
@@ -126,3 +134,20 @@ print(paste("not correct:",not_correct, "(",(not_correct / total_number*100.0), 
 print(paste("not decision:",no_decision, "(",(no_decision / total_number*100.0), "%)" ))
 total_number
 
+file="pair0097.txt"
+ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=" ", header=FALSE)
+names(ce_pair_data) = c('X', 'Y')
+scatter.smooth(ce_pair_data[,'X'], ce_pair_data[,'Y'])
+
+
+data=simuXY(sample_size=2000)
+r1=HCR(data$X,data$Y)
+r2=HCR(data$Y,data$X)
+r1$score < r2$score
+r1$score
+r2$score
+# The canonical hidden representation
+unique(r1$data[,c("X","Yp")])
+# The recovery of hidden representation
+data
+unique(data.frame(data$X,data$Yp))

@@ -3,10 +3,14 @@ import numpy as np
 import pandas as pd
 from iacm import iacm, iacm_timeseries, iacm_auto
 from igci import igci
+from code_extern.cisc_master.cisc import cisc
+#from code_extern.cisc_master.dr import dr
+from code_extern.cisc_master.entropic import entropic
 from data_preparation import read_data, read_synthetic_data
 from scipy.stats import spearmanr, kendalltau
 from plot import plot_distributions
-from data_generation import generate_nonlinear_data, generate_nonlinear_discrete_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data, generate_linear_discrete_data
+import cdt
+from data_generation import generate_nonlinear_data, generate_discrete_data, generate_continuous_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data
 from sklearn.preprocessing import StandardScaler, RobustScaler
 
 
@@ -69,36 +73,32 @@ def get_ground_truth(content):
 def get_stat_entry(data):
     total_number = data['correct'] + data['not_correct'] + data['no_decision']
     if total_number > 0:
-        return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(data['correct']) + "," + str(data['not_correct']) + "," + str(data['no_decision']) + "/" + str(total_number) + ")"
+        #return str(round(data['correct'] / total_number * 100, 2)) + ", " + str(round(data['avg_error']/data['total_nb'], 4)) + " (" + str(round(data['correct'],2)) + "," + str(round(data['not_correct'],2)) + "," + str(round(data['no_decision'],2)) + "/" + str(round(total_number,2)) + ")"
+        return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(round(data['correct'], 2)) + "," + str(round(data['not_correct'], 2)) + "," + str(round(data['no_decision'], 2)) + "/" + str(round(total_number, 2)) + ")"
     else:
         return ""
 
-def print_for_evaluation(statistics, size_alphabet, params, base):
-    print(str(size_alphabet) + ";" +
-          get_stat_entry(statistics['igci']) + ";" +
-          get_stat_entry(statistics['iacm_auto']) + ";" +
-          get_stat_entry(statistics['iacm_split_discrete']) + ";" +
-          get_stat_entry(statistics['iacm_discrete_split']) + ";" +
-          get_stat_entry(statistics['iacm_discrete_cluster']) + ";" +
-          get_stat_entry(statistics['iacm_cluster_discrete']) + ";" +
-          get_stat_entry(statistics['iacm_new_strategy']) + ";" +
-          get_stat_entry(statistics['iacm_theoretic_coverage']) + ";" +
+
+def print_for_evaluation(statistics, alphabet_size_x, alphabet_size_y, params, base):
+    print(str(alphabet_size_x) + "_" + str(alphabet_size_y) + ";" +
           str(params['bins']) + ";" + str(params['nb_cluster']) + ";" +
-          str(base))
+          str(base) + ";" +
+            ";".join([get_stat_entry(value) for method, value in statistics.items()]))
 
 
-def run_simulations(structure, max_samples, size_alphabet, nr_simulations):
+def run_simulations(structure, sample_sizes, alphabet_size_x, alphabet_size_y, nr_simulations):
     for i in range(0, nr_simulations):
-        if structure == 'nonlinear_discrete':
-            obsX, obsY, intX, intY = generate_nonlinear_discrete_data(max_samples, size_alphabet)
-        elif structure == 'linear_discrete':
-            obsX, obsY, intX, intY = generate_linear_discrete_data(max_samples, size_alphabet)
+        max_samples = sample_sizes[np.random.randint(3)]
+        if 'discrete' in structure:
+            data = generate_discrete_data(structure=structure, sample_size=max_samples, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y)
         else:
-            continue
+            obsX, obsY, intX, intY = generate_continuous_data(structure=structure, sample_size=max_samples)
+            data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
 
-        data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
         filename = "pair" + str(i) + ".csv"
-        data.to_csv(f'simulations/{structure}/{size_alphabet}/{filename}', sep=" ", header=False, index=False)
+        if not os.path.exists(f'simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}'):
+            os.makedirs(f'simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}')
+        data.to_csv(f'simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}/{filename}', sep=" ", header=False, index=False)
 
 
 def print_for_preprocess_evaluation(preprocessing_stat):
@@ -113,35 +113,144 @@ def print_for_preprocess_evaluation(preprocessing_stat):
             res_str = str(file)
 
 
+def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_y, params, verbose):
+    res = "no decision"
+    stats = dict()
+    if method == 'ANM':
+        pairwise_cd_algo = cdt.causality.pairwise.ANM()
+        cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
+        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+        if cdt_res > 0:
+            res = "X->Y"
+        elif cdt_res < 0:
+            res = "Y->X"
+    elif method == 'BivariateFit':
+        pairwise_cd_algo = cdt.causality.pairwise.BivariateFit()
+        cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
+        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+        if cdt_res > 0:
+            res = "X->Y"
+        elif cdt_res < 0:
+            res = "Y->X"
+    elif method == 'IGCI':
+        pairwise_cd_algo = cdt.causality.pairwise.IGCI()
+        cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
+        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+        if cdt_res > 0:
+            res = "X->Y"
+        elif cdt_res < 0:
+            res = "Y->X"
+    elif method == 'CDS':
+        pairwise_cd_algo = cdt.causality.pairwise.CDS()
+        cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
+        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+        if cdt_res > 0:
+            res = "X->Y"
+        elif cdt_res < 0:
+            res = "Y->X"
+    elif method == 'GNN':
+        pairwise_cd_algo = cdt.causality.pairwise.GNN()
+        cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
+        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+        if cdt_res > 0:
+            res = "X->Y"
+        elif cdt_res < 0:
+            res = "Y->X"
+    elif method == 'RECI':
+        pairwise_cd_algo = cdt.causality.pairwise.RECI()
+        cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
+        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+        if cdt_res > 0:
+            res = "X->Y"
+        elif cdt_res < 0:
+            res = "Y->X"
+    elif method == 'CISC':
+        cisc_score = cisc(data['X'], data['Y'])
+        if cisc_score[0] < cisc_score[1]:
+            res = "X->Y"
+        elif cisc_score[0] > cisc_score[1]:
+            res = "Y->X"
+    elif method == "DR":
+        level = 0.05
+        dr_score = 0#dr(data['X'].tolist(), data['Y'].tolist(), level)
+        if dr_score[0] > level and dr_score[1] < level:
+            res = "X->Y"
+        elif dr_score[0] < level and dr_score[1] > level:
+            res = "Y->X"
+    elif method == "ACID":
+        ent_score = entropic(pd.DataFrame(np.column_stack((data['X'], data['Y']))))
+        if ent_score[0] < ent_score[1]:
+            res = "X->Y"
+        elif ent_score[0] > ent_score[1]:
+            res = "Y->X"
+    elif 'IACM' in method:
+        if 'monotone' in method:
+            params[base_x]['monotone'] = True
+        else:
+            stat_s, p_s = spearmanr(data['X'], data['Y'])
+            if abs(stat_s) >= 0.7 and p_s <= 0.01:
+                params[base_x]['monotone'] = True
+            else:
+                params[base_x]['monotone'] = False
+
+        if file not in preprocessing_stat.keys():
+            preprocessing_stat[file] = dict()
+        preprocess_method = method.split('-')[1]
+        if preprocess_method == "":
+            preprocess_method = 'auto'
+
+        params[base_x]['preprocess_method'] = preprocess_method
+        if verbose: print(preprocess_method)
+        preprocessing_stat[file][preprocess_method] = dict()
+
+        if file in timeseries_files:
+            res = iacm_timeseries(base_x=base_x, base_y=base_y, data=data, params=params[base_x], max_lag=10, verbose=verbose)
+            crit = 0
+        else:
+            res, stats, crit = iacm(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose)
+
+        # plot_distributions()
+        statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
+
+    return res, stats
+
+
 timeseries_files = [] #['pair0042.txt', 'pair0068.txt', 'pair0069.txt', 'pair0077.txt', 'pair0094.txt', 'pair0095.txt']
+#method_list = ['IACM_auto', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI']
 
 
-def run_inference(data_set, structure, size_alphabet, base_x, base_y, params):
+def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_size_y, base_x, base_y, params):
     statistics = {'igci': dict(), 'iacm_none': dict(), 'iacm_auto': dict(), 'iacm_discrete_split': dict(), 'iacm_split_discrete': dict(),
                   'iacm_cluster_discrete': dict(), 'iacm_split_strategy': dict(),
                   'iacm_discrete_cluster': dict(), 'iacm_alternativ': dict(), 'iacm_theoretic_coverage': dict(),
                   'iacm_new_strategy': dict()}
+    statistics = dict()
+    for method in method_list:
+        statistics[method] = dict()
     preprocessing_stat = dict()
     for key, value in statistics.items():
         statistics[key] = {'correct': 0, 'not_correct': 0, 'no_decision': 0, 'not_correct_examples': [],
-                           'correct_examples': []}
+                           'correct_examples': [], 'avg_error': 0.0, 'total_nb': 1}
 
     not_touched_files = []
     total = 0
     verbose = False
+    weights = []
     if data_set == 'CEP':
         directory = "./pairs"
-    elif data_set == 'Synthetic':
-        directory = "./simulations_extern/CauseEffectBenchmark/SIM-c"
+        weights = open(directory + "/pairmeta.txt", "r").readlines()
+    elif 'SIM' in data_set:
+        directory = "./simulations_extern/CauseEffectBenchmark/" + data_set
         ground_truth_lines = open(directory + "/pairmeta.txt","r").readlines()
     else:
-        directory = f'./simulations/{structure}/{size_alphabet}'
+        directory = f'./simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}'
     for file in os.listdir(directory):
-        if "_des" not in file or "pairmeta" not in file:
+        if "_des" not in file and "pairmeta" not in file and "README" not in file:
             try:
                 some_method_succeeded = False
                 #file = "pair0008.txt"
-                if data_set == "Synthetic":
+                if 'SIM' in data_set:
+                    weight = 1.0
                     data = read_synthetic_data(directory, file)
                     for line in ground_truth_lines:
                         if file[4:8] in line:
@@ -155,73 +264,56 @@ def run_inference(data_set, structure, size_alphabet, base_x, base_y, params):
                     data = read_data(directory, file)
                     content = open("./pairs/" + file.replace(".txt", "_des.txt"), "r").read().lower()
                     ground_truth = get_ground_truth(content)
+                    weight = 1.0
+                    for line in weights:
+                        if file[4:8] in line:
+                            weight = float(line.split()[5])
+                            break
                 else:
                     data = read_data(directory, file)
                     ground_truth = "X->Y"
+                    weight = 1.0
                 data = pd.DataFrame(RobustScaler().fit(data).transform(data))
                 data.columns = ['X', 'Y']
-                ig = igci(data['X'], data['Y'], refMeasure=1, estimator=2)
-                if ig == 0:
-                    ig = igci(data['X'], data['Y'], refMeasure=2, estimator=2)
-                if (ground_truth in 'X->Y' and ig < 0) or (ground_truth in 'Y->X' and ig > 0):
-                    statistics['igci']['correct'] = statistics['igci']['correct'] + 1
-                else:
-                    statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + 1
-                    statistics['igci']['not_correct_examples'].append(file)
 
-                stat_s, p_s = spearmanr(data['X'], data['Y'])
-                if abs(stat_s) >= 0.7 and p_s <= 0.01:
-                    params[base_x]['monotone'] = True
-                else:
-                    params[base_x]['monotone'] = False
+                for method in method_list:
+                    res, stats = get_result(method, file, data, statistics, preprocessing_stat, base_x, base_y, params, verbose)
 
-                preprocessing_stat[file] = dict()
-                for preprocess_method in ['auto', 'split_discrete', 'discrete_split']: #, 'split_discrete', 'discrete_split', 'discrete_cluster', 'cluster_discrete', 'new_strategy']:
-                    params[base_x]['preprocess_method'] = preprocess_method
-                    if verbose: print(preprocess_method)
-                    preprocessing_stat[file][preprocess_method] = dict()
-                    #print(ground_truth)
-                    if file in timeseries_files:
-                        res = iacm_timeseries(base_x=base_x, base_y=base_y, data=data, params=params[base_x], max_lag=10, verbose=verbose)
-                        stats = dict()
-                    else:
-                        res, stats, crit = iacm(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose)
+                    #ig = igci(data['X'], data['Y'], refMeasure=1, estimator=2)
+                    #if ig == 0:
+                    #    ig = igci(data['X'], data['Y'], refMeasure=2, estimator=2)
+                    #if (ground_truth in 'X->Y' and ig < 0) or (ground_truth in 'Y->X' and ig > 0):
+                    #    statistics['igci']['correct'] = statistics['igci']['correct'] + weight
+                    #else:
+                    #    statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + weight
+                    #    statistics['igci']['not_correct_examples'].append(file)
 
-                    #print(res)
-                    #plot_distributions()
                     if ground_truth == res:
-                        statistics['iacm_' + preprocess_method]['correct'] = statistics['iacm_' + preprocess_method][
-                                                                                 'correct'] + 1
-                        statistics['iacm_' + preprocess_method]['correct_examples'].append(file)
-                        preprocessing_stat[file][preprocess_method]['correct'] = 1
-                        if not some_method_succeeded:
-                            statistics['iacm_theoretic_coverage']['correct'] = statistics['iacm_theoretic_coverage'][
-                                                                                   'correct'] + 1
-                            statistics['iacm_theoretic_coverage']['correct_examples'].append(file)
-                            some_method_succeeded = True
-                        total_method = statistics['iacm_' + preprocess_method]['correct'] + statistics['iacm_' + preprocess_method]['not_correct'] + statistics['iacm_' + preprocess_method]['no_decision']
-                        if verbose: print("correct: " + str(statistics['iacm_' + preprocess_method]['correct'] / total_method))
+                        statistics[method]['correct'] = statistics[method]['correct'] + weight
+                        statistics[method]['correct_examples'].append(file)
+                        if 'IACM' in method:
+                            preprocessing_stat[file][method.split('-')[1]]['correct'] = weight
+                        total_method = statistics[method]['correct'] + statistics[method]['not_correct'] + statistics[method]['no_decision']
+                        if verbose: print("correct: " + str(statistics[method]['correct'] / total_method))
                     elif "no decision" in res:
-                        statistics['iacm_' + preprocess_method]['no_decision'] = \
-                        statistics['iacm_' + preprocess_method]['no_decision'] + 1
-                        preprocessing_stat[file][preprocess_method]['correct'] = 0
-                        statistics['iacm_theoretic_coverage']['not_correct_examples'].append(file)
+                        statistics[method]['no_decision'] = \
+                        statistics[method]['no_decision'] + weight
+                        if 'IACM' in method:
+                            preprocessing_stat[file][method.split('-')[1]]['correct'] = 0
                         if verbose: print("no decision")
                     else:
-                        statistics['iacm_' + preprocess_method]['not_correct'] = \
-                        statistics['iacm_' + preprocess_method]['not_correct'] + 1
-                        preprocessing_stat[file][preprocess_method]['correct'] = 0
-                        statistics['iacm_' + preprocess_method]['not_correct_examples'].append(file)
+                        statistics[method]['not_correct'] = \
+                        statistics[method]['not_correct'] + weight
+                        if 'IACM' in method:
+                            preprocessing_stat[file][method.split('-')[1]]['correct'] = 0
+                        statistics[method]['not_correct_examples'].append(file)
                         if verbose: print("not correct")
-                    for k,v in stats.items():
-                        preprocessing_stat[file][preprocess_method][k] = v
-                if not some_method_succeeded:
-                    statistics['iacm_theoretic_coverage']['not_correct_examples'].append(file)
-                    statistics['iacm_theoretic_coverage']['not_correct'] = statistics['iacm_theoretic_coverage'][
-                                                                               'not_correct'] + 1
+                    if 'IACM' in method:
+                        for k,v in stats.items():
+                            preprocessing_stat[file][method.split('-')[1]][k] = v
 
-                total = total + 1
-                if verbose: print(str(statistics['iacm_cluster']['correct']) + 'from' + str(total))
+                total = total + weight
+                statistics[method]['total_nb'] = statistics[method]['total_nb'] + 1
                 if verbose: print(total)
 
             except Exception as e:
@@ -232,19 +324,25 @@ def run_inference(data_set, structure, size_alphabet, base_x, base_y, params):
     if verbose: print(not_touched_files)
 
     # print out for evaluation
-    print_for_evaluation(statistics, size_alphabet, params[base_x], base_x)
+    print_for_evaluation(statistics, alphabet_size_x, alphabet_size_y, params[base_x], base_x)
     #print_for_preprocess_evaluation(preprocessing_stat)
 
 
+structure_list = ['linear_discrete', 'nonlinear_discreate', 'linear_continuous', 'nonlinear_continuous']
+
 if __name__ == '__main__':
-    structure = 'nonlinear_discrete'
+    structure = 'linear_discrete'
     nr_simulations = 100
-    max_samples = 100
-    size_alphabet = 3
+    sample_sizes = [100, 500, 1000]
+    alphabet_size_x = 6
+    alphabet_size_y = 5
     base = 2
-    #run_simulations(structure=structure, max_samples=max_samples, size_alphabet=size_alphabet, nr_simulations=nr_simulations)
-    for bins in range(2, 25):
-        for clt in range(2,3):
+    #run_simulations(structure=structure, sample_sizes=sample_sizes, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, nr_simulations=nr_simulations)
+    # ['IACM-none', 'IACM-auto', 'IACMmonotone-none', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
+    methods = ['IACM-none', 'IACM-auto', 'IACMmonotone-none', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
+    print("alphabet;bins;cluster;base;" + ";".join(methods))
+    for bins in range(7, 8):
+        for clt in range(2, 3):
             params[base]['bins'] = bins
             params[base]['nb_cluster'] = clt
-            run_inference(data_set='Synthetic', structure=structure, size_alphabet=size_alphabet, base_x=base, base_y=base, params=params)
+            run_inference(method_list=methods, data_set='SIM-ln', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)

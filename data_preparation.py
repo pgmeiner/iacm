@@ -210,5 +210,34 @@ def split_data(data, col_to_prepare, sort_data=True):
     return prep_data['X'][0:i_max], prep_data['Y'][0:i_max], prep_data['X'][i_max:], prep_data['Y'][i_max:], i_max
 
 
+def split_with_equal_std(data, col_to_prepare, sort_data = True):
+    if sort_data:
+        prep_data = data.sort_values(by=[col_to_prepare]).reset_index()
+    else:
+        return split_data(data, col_to_prepare, sort_data)
+
+    obsX = []
+    obsY = []
+    intX = []
+    intY = []
+    switching_sets = True
+    for i in range(prep_data.shape[0]):
+        if switching_sets:
+            obsX.append(prep_data['X'][i])
+            obsY.append(prep_data['Y'][i])
+            switching_sets = False
+        else:
+            intX.append(prep_data['X'][i])
+            intY.append(prep_data['Y'][i])
+            switching_sets = True
+
+    np.std(obsX)
+    np.std(intX)
+    np.std(obsY)
+    np.std(intY)
+
+    return pd.Series(obsX), pd.Series(obsY), pd.Series(intX), pd.Series(intY), int(prep_data.shape[0] / 2)
+
+
 def split_data_at_index(data, idx):
     return data['X'][0:idx], data['Y'][0:idx], data['X'][idx:], data['Y'][idx:]
