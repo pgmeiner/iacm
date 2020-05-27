@@ -52,53 +52,100 @@ correct = 0
 not_correct = 0
 no_decision = 0
 simulation = TRUE
+dataset = "own"
+method = 'nonICP'
 if (simulation == TRUE) {
-  directory = "../simulations/nonlinear_discrete/100_100/"
-} else {
+  directory = "../simulations/linear_continuous/3_3/"
+}
+if (dataset == 'Food') {
+  directory = "../real_world_data/food_intolerances/"
+} else if (dataset == 'Bridge') {
+  directory = "../real_world_data/bridge_data/"
+} else if (dataset == 'CEP') {
   directory = "../pairs/"
 }
 for (file in list.files(file.path(wd, directory))) {
-  if ((simulation == FALSE & in_str("pair0", file) & in_str("_des", file) == FALSE) | (simulation == TRUE)) {
+  if ((simulation == FALSE & (in_str("pair0", file) | in_str(".csv", file)) & in_str("_des", file) == FALSE) | (simulation == TRUE)) {
     result = tryCatch({
       print(file)
-      #file="pair0002.txt"
+      #file="erected_span.csv"
+      #file="pair26.csv"
       
-      ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=" ", header=FALSE)
+      if (dataset == 'CEP' | dataset == 'own') {
+        ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=" ", header=FALSE)
+      } else {
+        ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=";", header=FALSE)
+      }
       names(ce_pair_data) = c('X', 'Y')
       ce_pair_data = ce_pair_data[order(ce_pair_data$X),]
       ce_pair_data = as.data.frame(apply(ce_pair_data[, c('X', 'Y')], 2, function(x) (x - mean(x))/(sd(x))))
-      if (simulation == TRUE) {
+      if (simulation == TRUE | dataset == "bridge" | dataset == "Food") {
         ce_pair_desc = "x->y"
       } else {
         ce_pair_desc <- tolower(readLines(file.path(wd, gsub(".txt", "_des.txt", paste("../pairs/",file, sep="")))))
       }
-      r1 <- HCR(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], is_anm=TRUE)
-      r2 <- HCR(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], is_anm=TRUE)
-      res_ = "no_decision"
-      if (r1$score > r2$score) {
-        res_ = "x->y"
-      } else if (r1$score < r2$score) {
-        res_ = "y->x"
+      if (method == 'HCR') {
+        r1 <- HCR(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], is_anm=TRUE)
+        r2 <- HCR(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], is_anm=TRUE)
+        res_ = "no_decision"
+        if (r1$score > r2$score) {
+          res_ = "x->y"
+        } else if (r1$score < r2$score) {
+          res_ = "y->x"
+        }
       }
-      r2$score
       #res <- ICML(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), model = train_gp, indtest = indtestHsic, output = FALSE)
       #res <- GDS(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), "SEMIND", pars, check = "checkUntilFirst", output = FALSE, kvec = c(10000), startAt = "emptyGraph")$Adj
       #res <- lingamWrap(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']))$Adj
       #res <- BruteForce(cbind(ce_pair_data[, 'X'], ce_pair_data[, 'Y']), "SEMIND", pars, output = FALSE)$Adj
-       # n=length(ce_pair_data[, 'X'])
-       # n_x = floor(n/2)
-       # ExpInd <- as.factor(c(rep(1,n_x),rep(2,n-n_x)))
-       # #res = nonlinearICP(cbind(ce_pair_data[, 'X']), ce_pair_data[, 'Y'], ExpInd)
-       # res = ICP(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], ExpInd)
-       # res_ = "no_decision"
-       # if (length(res$acceptedSets) > 0 && res$acceptedSets == 1){
-       #   res_ = "x->y"
-       # } else {
-       #   res = ICP(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], ExpInd)
-       #   if (length(res$acceptedSets) > 0 && res$acceptedSets == 1){
-       #     res_ = "y->x"
-       #   }
-       # }
+      else if (method == 'ICP') {
+        n=length(ce_pair_data[, 'X'])
+        n_x = floor(n/2)
+        ExpInd <- as.factor(c(rep(1,n_x),rep(2,n-n_x)))
+        #res = nonlinearICP(cbind(ce_pair_data[, 'X']), ce_pair_data[, 'Y'], ExpInd)
+        res = 0
+        resy = list()
+        tryCatch({
+        res = ICP(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], ExpInd)
+        }, error = function(e){
+          # do nothing
+        })
+        tryCatch({
+        resy = ICP(ce_pair_data[, 'Y'], ce_pair_data[, 'X'], ExpInd)
+        }, error = function(e){
+          # do nothing
+        })
+        res_ = "no_decision"
+        if (((length(res$acceptedSets) == 1 && res$acceptedSets[[1]] == 1) || 
+            (length(res$acceptedSets) == 2 && res$acceptedSets[[2]] == 1)) && (length(resy$acceptedSets) == 0)){
+          res_ = "x->y"
+        } else {
+          res = resy
+          if ((length(res$acceptedSets) == 1 && res$acceptedSets[[1]] == 1) || 
+              (length(res$acceptedSets) == 2 && res$acceptedSets[[2]] == 1)){
+            res_ = "y->x"
+          }
+        }
+      }
+      else if (method == 'nonICP') {
+        n=length(ce_pair_data[, 'Y'])
+        n_x = floor(n/2)
+        ExpInd <- as.factor(c(rep(1,n_x),rep(2,n-n_x)))
+        res = 0
+        res = nonlinearICP(cbind(ce_pair_data[, 'X']), ce_pair_data[, 'Y'], ExpInd)
+        #res = ICP(ce_pair_data[, 'X'], ce_pair_data[, 'Y'], ExpInd)
+        res_ = "no_decision"
+        if ((length(res$acceptedSets) == 1 && res$acceptedSets[[1]] == 1) || 
+            (length(res$acceptedSets) == 2 && res$acceptedSets[[2]] == 1)){
+          res_ = "x->y"
+        } else {
+          res = nonlinearICP(cbind(ce_pair_data[, 'Y']), ce_pair_data[, 'X'], ExpInd)
+          if ((length(res$acceptedSets) == 1 && res$acceptedSets[[1]] == 1) || 
+              (length(res$acceptedSets) == 2 && res$acceptedSets[[2]] == 1)){
+            res_ = "y->x"
+          }
+        }
+      }
       
 #      if (res[1,2] == 1) {
 #       res_ = "x->y"
@@ -129,12 +176,13 @@ for (file in list.files(file.path(wd, directory))) {
 }
 
 total_number = correct + not_correct + no_decision
+print(paste((correct / total_number*100.0)," (",correct,",",not_correct,",",no_decision,"/",total_number,")",sep=""))
 print(paste("correct:",correct, "(",(correct / total_number*100.0), "%)" ))
 print(paste("not correct:",not_correct, "(",(not_correct / total_number*100.0), "%)" ))
 print(paste("not decision:",no_decision, "(",(no_decision / total_number*100.0), "%)" ))
 total_number
 
-file="pair0097.txt"
+file="pair7.csv"
 ce_pair_data <- read.csv(file.path(wd, paste(directory,file, sep="")), sep=" ", header=FALSE)
 names(ce_pair_data) = c('X', 'Y')
 scatter.smooth(ce_pair_data[,'X'], ce_pair_data[,'Y'])

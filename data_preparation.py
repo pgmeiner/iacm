@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from MDLP import MDLP_Discretizer
+import warnings
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans, SpectralClustering, AgglomerativeClustering
 
@@ -155,9 +156,11 @@ def discretize_data(data, params):
 
 
 def cluster_data(data, col_to_prepare, params):
-    cluster = KMeans(n_clusters=params['nb_cluster']).fit(data[['X','Y']])#np.array(data[col_to_prepare]).reshape(-1,1))
-    #cluster = SpectralClustering(n_clusters=params['nb_cluster']).fit(data[['X', 'Y']])
-    data['labels'] = cluster.labels_
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cluster = KMeans(n_clusters=params['nb_cluster']).fit(data[['X','Y']])#np.array(data[col_to_prepare]).reshape(-1,1))
+        #cluster = SpectralClustering(n_clusters=params['nb_cluster']).fit(data[['X', 'Y']])
+        data['labels'] = cluster.labels_
     return split_at_clustered_labels(data, col_to_prepare, params), data
 
 
@@ -165,18 +168,18 @@ def split_at_clustered_labels(data, col_to_prepare, params):
     # calc variances in the cluster
     var = dict()
     for i_cluster in range(params['nb_cluster']):
-        var[i_cluster] = max(data[data['labels'] == i_cluster]['X'].var(), data[data['labels'] == i_cluster]['Y'].var())
+        var[i_cluster] = data[data['labels'] == i_cluster][col_to_prepare].var()# max(data[data['labels'] == i_cluster]['X'].var(), data[data['labels'] == i_cluster]['Y'].var())
 
     if 'X' in col_to_prepare:
         for i_cluster in range(params['nb_cluster']):
-            if var[i_cluster] <= min([val for i, val in var.items() if i is not i_cluster]):
+            if not np.isnan(var[i_cluster]) and var[i_cluster] <= min([val for i, val in var.items() if (i is not i_cluster and not np.isnan(val))]):
                 return data[data['labels'] == i_cluster]['X'], \
                        data[data['labels'] == i_cluster]['Y'], \
                        data[(data['labels'] != i_cluster)]['X'], \
                        data[(data['labels'] != i_cluster)]['Y']
     else:
         for i_cluster in range(params['nb_cluster']):
-            if var[i_cluster] <= min([val for i, val in var.items() if i is not i_cluster]):
+            if not np.isnan(var[i_cluster]) and var[i_cluster] <= min([val for i, val in var.items() if (i is not i_cluster and not np.isnan(val))]):
                 return data[(data['labels'] != i_cluster)]['X'], \
                        data[(data['labels'] != i_cluster)]['Y'], \
                        data[data['labels'] == i_cluster]['X'], \
