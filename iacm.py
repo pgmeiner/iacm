@@ -7,6 +7,7 @@ from data_preparation import get_probabilities, get_probabilities_intervention, 
 from meta_data import setup_meta_data, base_repr
 from plot import plot_distribution, plot_distributions, init_points, init_figure
 from typing import List
+from metrics import KL_Dist_X_Y, KL_Dist
 from scipy.stats import chisquare
 
 meta_data = dict()
@@ -190,6 +191,7 @@ def FindBestApproximationToConsistentModel(constraint_data, meta_data):
             NP[code] = 0
 
     res['NP'] = NP
+    res['Ptilde'] = P
     res["GlobalError"] = log2(1 / S)
 
     return res
@@ -417,34 +419,63 @@ def findBestModelXtoY(base_x, base_y, data, verbose):
     return modelXtoY
 
 
+def get_distr_x(np):
+    distr = [np['0000'] + np['0001'] + np['0010'] + np['0011'] + np['0100'] + np['0101'] + np['0110'] + np['0111'],
+             np['1000'] + np['1001'] + np['1010'] + np['1011'] + np['1100'] + np['1101'] + np['1110'] + np['1111']]
+    return distr / sum(distr)
+
+
+def get_distr_y(np):
+    distr = [np['0000'] + np['0001'] + np['0010'] + np['0011'] + np['1000'] + np['1001'] + np['1010'] + np['1011'],
+             np['0100'] + np['0101'] + np['0110'] + np['0111'] + np['1100'] + np['1101'] + np['1110'] + np['1111']]
+    return distr / sum(distr)
+
+
 def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, params, verbose, preserve_order):
     monotone = (params['monotone'] and base_x == 2 and base_y == 2)
     x_obsX, x_obsY, x_intX, x_intY = preprocessing(data=data, sort_col='X', preserve_order=preserve_order, params=params, base_x=base_x, base_y=base_y)
+    dataXY = pd.concat([pd.concat([x_obsX, x_intX]), pd.concat([x_obsY, x_intY])], axis=1)
+    dataXY.columns = ['X', 'Y']
     y_obsX, y_obsY, y_intX, y_intY = preprocessing(data=data, sort_col='Y', preserve_order=preserve_order, params=params, base_x=base_x, base_y=base_y)
     if base_x == base_y == 2:
         modelXtoY = findBestModelXtoY(base_x=base_x, base_y=base_y, data=(x_obsX, x_obsY, x_intX, x_intY), verbose=verbose)
         modelYtoX = findBestModelXtoY(base_x=base_x, base_y=base_y, data=(y_obsY, y_obsX, y_intY, y_intX), verbose=verbose)
-        result = decideBestModel(modelXtoY, modelYtoX, False, verbose)
+        result = decideBestModel(modelXtoY, modelYtoX, False, verbose, strategy='kl_dist')
+        result_xy = decideBestModel(modelXtoY, modelYtoX, False, verbose, strategy='kl_xy')
     else:
         modelXtoY = testModelFromXtoY(base_x, base_y, x_obsX, x_obsY, x_intX, x_intY, False, "green", monotone, verbose)
         modelYtoX = testModelFromXtoY(base_x, base_y, y_obsY, y_obsX, y_intY, y_intX, False, "yellow", monotone, verbose)
-        result = decideBestModel(modelXtoY, modelYtoX, monotone, verbose)
+        result = decideBestModel(modelXtoY, modelYtoX, monotone, verbose, strategy='kl_dist')
+        result_xy = decideBestModel(modelXtoY, modelYtoX, monotone, verbose, strategy='kl_dist')
 
-    return result['result'], result['min_error']
+    return (result['result'], result_xy['result']), (result['min_error'], result_xy['min_error'])
 
     # for color in ['black', 'green', 'yellow', 'red']:
     #    ax.scatter(scatter_points[color]['x'], scatter_points[color]['y'], scatter_points[color]['z'], color=color, linewidth=1, s=2)
     # plt.show()
 
 
-def decideBestModel(modelXtoY, modelYtoX, monotone, verbose, tolerance=1.0e-05):
+def getKL_X_Y(model):
+    P = model['Ptilde']
+    Px = get_distr_x(P)
+    Py = get_distr_y(P)
+    return KL_Dist(Px, Py)
+
+
+def decideBestModel(modelXtoY, modelYtoX, monotone, verbose, strategy='kl_dist', tolerance=1.0e-05):
     bestModel = dict()
-    errorXtoY = calcError(modelXtoY)
+    if strategy == 'kl_dist':
+        errorXtoY = calcError(modelXtoY)
+        errorYtoX = calcError(modelYtoX)
+        error_tolerance = 0.01
+    else:
+        errorXtoY = getKL_X_Y(modelXtoY)
+        errorYtoX = getKL_X_Y(modelYtoX)
+        error_tolerance = 1.0e-12
     if verbose: print("total Error X -> Y: " + str(errorXtoY))
-    errorYtoX = calcError(modelYtoX)
     if verbose: print("total Error Y -> X: " + str(errorYtoX))
 
-    if abs(errorXtoY - errorYtoX) < 0.01:
+    if abs(errorXtoY - errorYtoX) < error_tolerance:
         if monotone or ('PNS' in modelXtoY and 'PNS' in modelYtoX):
             PNSXtoY = modelXtoY['PNS']
             PNSYtoX = modelYtoX['PNS']
@@ -485,8 +516,8 @@ def iacm_timeseries(base_x: int, base_y: int, data: pd.DataFrame, params, max_la
         tmp_data = tmp_data.dropna().reset_index(drop=True)
         res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=tmp_data, params=params, verbose=verbose, preserve_order=True)
         timeseries_result[lag] = dict()
-        timeseries_result[lag]['result'] = res
-        timeseries_result[lag]['crit'] = crit
+        timeseries_result[lag]['result'] = res[1]
+        timeseries_result[lag]['crit'] = crit[1]
 
     min_crit = 1
     best_res = "no decision"

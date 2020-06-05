@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from MDLP import MDLP_Discretizer
+#from MDLP import MDLP_Discretizer
 import warnings
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans, SpectralClustering, AgglomerativeClustering
@@ -148,11 +148,13 @@ def get_probabilities_intervention(contingenceTable, base_x: int, base_y: int):
 
 
 def discretize_data(data, params):
-    disc = pd.DataFrame(KBinsDiscretizer(n_bins=params['bins'], encode='ordinal', strategy='uniform').fit_transform(data[['X', 'Y']]))
-    disc.columns = ['X', 'Y']
-    disc['X'] = disc['X'] - params['x_shift']
-    disc['Y'] = disc['Y'] - params['y_shift']
-    return disc
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        disc = pd.DataFrame(KBinsDiscretizer(n_bins=params['bins'], encode='ordinal', strategy='uniform').fit_transform(data[['X', 'Y']]))
+        disc.columns = ['X', 'Y']
+        disc['X'] = disc['X'] - params['x_shift']
+        disc['Y'] = disc['Y'] - params['y_shift']
+        return disc
 
 
 def cluster_data(data, col_to_prepare, params):
@@ -169,6 +171,13 @@ def split_at_clustered_labels(data, col_to_prepare, params):
     var = dict()
     for i_cluster in range(params['nb_cluster']):
         var[i_cluster] = data[data['labels'] == i_cluster][col_to_prepare].var()# max(data[data['labels'] == i_cluster]['X'].var(), data[data['labels'] == i_cluster]['Y'].var())
+
+    for i_cluster in range(params['nb_cluster']):
+        if not np.isnan(var[i_cluster]) and var[i_cluster] <= min([val for i, val in var.items() if (i is not i_cluster and not np.isnan(val))]):
+            return data[data['labels'] == i_cluster]['X'], \
+                   data[data['labels'] == i_cluster]['Y'], \
+                   data[(data['labels'] != i_cluster)]['X'], \
+                   data[(data['labels'] != i_cluster)]['Y']
 
     if 'X' in col_to_prepare:
         for i_cluster in range(params['nb_cluster']):

@@ -4,6 +4,7 @@ import numpy as np
 import cvxpy as cp
 from data_preparation import getContingencyTables, get_probabilities, get_probabilities_intervention
 
+
 def CalcIterativeProjectionToHypergraph(G: List[List[int]], n: int, P: List[float], MaxIter: int):
     # Berechnet Projektion von P auf Exponentialfamilie E_G induziert durch Hypergraph G
     len = int(pow(2, n))

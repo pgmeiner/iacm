@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from iacm import iacm_discovery, iacm_timeseries
 from code_extern.cisc_master.cisc import cisc
+import warnings
 #from code_extern.cisc_master.dr import dr
 from code_extern.cisc_master.entropic import entropic
 from data_preparation import read_data, read_synthetic_data
@@ -70,12 +71,32 @@ def get_ground_truth(content):
 
 
 def get_stat_entry(data):
-    total_number = data['correct'] + data['not_correct'] + data['no_decision']
-    if total_number > 0:
-        #return str(round(data['correct'] / total_number * 100, 2)) + ", " + str(round(data['avg_error']/data['total_nb'], 4)) + " (" + str(round(data['correct'],2)) + "," + str(round(data['not_correct'],2)) + "," + str(round(data['no_decision'],2)) + "/" + str(round(total_number,2)) + ")"
-        return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(round(data['correct'], 2)) + "," + str(round(data['not_correct'], 2)) + "," + str(round(data['no_decision'], 2)) + "/" + str(round(total_number, 2)) + ")"
+    if 'correct0' in data:
+        total_number0 = data['correct0'] + data['not_correct0'] + data['no_decision0']
+        total_number1 = data['correct1'] + data['not_correct1'] + data['no_decision1']
+        if total_number0 > 0:
+            return str(round(data['correct0'] / total_number0 * 100, 2)) + " (" + str(
+                round(data['correct0'], 2)) + "," + str(round(data['not_correct0'], 2)) + "," + str(
+                round(data['no_decision0'], 2)) + "/" + str(round(total_number0, 2)) + ") " + str(
+                round(data['correct1'] / total_number1 * 100, 2)) + " (" + str(
+                round(data['correct1'], 2)) + "," + str(round(data['not_correct1'], 2)) + "," + str(
+                round(data['no_decision1'], 2)) + "/" + str(round(total_number1, 2)) + ")"
+        else:
+            total_number = data['correct'] + data['not_correct'] + data['no_decision']
+            if total_number > 0:
+                # return str(round(data['correct'] / total_number * 100, 2)) + ", " + str(round(data['avg_error']/data['total_nb'], 4)) + " (" + str(round(data['correct'],2)) + "," + str(round(data['not_correct'],2)) + "," + str(round(data['no_decision'],2)) + "/" + str(round(total_number,2)) + ")"
+                return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(
+                    round(data['correct'], 2)) + "," + str(round(data['not_correct'], 2)) + "," + str(
+                    round(data['no_decision'], 2)) + "/" + str(round(total_number, 2)) + ")"
+            else:
+                return ""
     else:
-        return ""
+        total_number = data['correct'] + data['not_correct'] + data['no_decision']
+        if total_number > 0:
+            #return str(round(data['correct'] / total_number * 100, 2)) + ", " + str(round(data['avg_error']/data['total_nb'], 4)) + " (" + str(round(data['correct'],2)) + "," + str(round(data['not_correct'],2)) + "," + str(round(data['no_decision'],2)) + "/" + str(round(total_number,2)) + ")"
+            return str(round(data['correct'] / total_number * 100, 2)) + " (" + str(round(data['correct'], 2)) + "," + str(round(data['not_correct'], 2)) + "," + str(round(data['no_decision'], 2)) + "/" + str(round(total_number, 2)) + ")"
+        else:
+            return ""
 
 
 def print_for_evaluation(statistics, alphabet_size_x, alphabet_size_y, params, base):
@@ -95,9 +116,9 @@ def run_simulations(structure, sample_sizes, alphabet_size_x, alphabet_size_y, n
             data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
 
         filename = "pair" + str(i) + ".csv"
-        if not os.path.exists(f'simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}'):
-            os.makedirs(f'simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}')
-        data.to_csv(f'simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}/{filename}', sep=" ", header=False, index=False)
+        if not os.path.exists(f'simulations/add_mult/{structure}/{alphabet_size_x}_{alphabet_size_y}'):
+            os.makedirs(f'simulations/add_mult/{structure}/{alphabet_size_x}_{alphabet_size_y}')
+        data.to_csv(f'simulations/add_mult/{structure}/{alphabet_size_x}_{alphabet_size_y}/{filename}', sep=" ", header=False, index=False)
 
 
 def print_for_preprocess_evaluation(preprocessing_stat):
@@ -117,11 +138,13 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
     if method == 'ANM':
         pairwise_cd_algo = cdt.causality.pairwise.ANM()
         cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
-        cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
-        if cdt_res > 0:
-            res = "X->Y"
-        elif cdt_res < 0:
-            res = "Y->X"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            cdt_res = pairwise_cd_algo.predict(cdt_data)[0]
+            if cdt_res > 0:
+                res = "X->Y"
+            elif cdt_res < 0:
+                res = "Y->X"
     elif method == 'BivariateFit':
         pairwise_cd_algo = cdt.causality.pairwise.BivariateFit()
         cdt_data = pd.DataFrame({'X': [np.array(data['X'])], 'Y': [np.array(data['Y'])]})
@@ -185,11 +208,12 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
         if 'monotone' in method:
             params[base_x]['monotone'] = True
         else:
-            stat_s, p_s = spearmanr(data['X'], data['Y'])
-            if abs(stat_s) >= 0.7 and p_s <= 0.01:
-                params[base_x]['monotone'] = True
-            else:
-                params[base_x]['monotone'] = False
+            with np.errstate(invalid='ignore'):
+                stat_s, p_s = spearmanr(data['X'], data['Y'])
+                if abs(stat_s) >= 0.7 and p_s <= 0.01:
+                    params[base_x]['monotone'] = True
+                else:
+                    params[base_x]['monotone'] = False
 
         if file not in preprocessing_stat.keys():
             preprocessing_stat[file] = dict()
@@ -207,12 +231,12 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
             res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose, preserve_order=False)
 
         # plot_distributions()
-        statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
+        #statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
 
     return res
 
 
-timeseries_files = ['histamin_blaehungen.csv', 'histamin_durchfall.csv', 'gluten_blaehungen.csv','sorbit_blaehungen.csv'] #['pair0042.txt', 'pair0068.txt', 'pair0069.txt', 'pair0077.txt', 'pair0094.txt', 'pair0095.txt']
+timeseries_files = []#['histamin_blaehungen.csv', 'histamin_durchfall.csv', 'gluten_blaehungen.csv','sorbit_blaehungen.csv'] #['pair0042.txt', 'pair0068.txt', 'pair0069.txt', 'pair0077.txt', 'pair0094.txt', 'pair0095.txt']
 #method_list = ['IACM_auto', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI']
 
 
@@ -227,7 +251,8 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
     preprocessing_stat = dict()
     for key, value in statistics.items():
         statistics[key] = {'correct': 0, 'not_correct': 0, 'no_decision': 0, 'not_correct_examples': [],
-                           'correct_examples': [], 'avg_error': 0.0, 'total_nb': 1}
+                           'correct_examples': [], 'avg_error': 0.0, 'total_nb': 1, 'correct0': 0, 'not_correct0': 0, 'no_decision0': 0,
+                           'correct1': 0, 'not_correct1': 0, 'no_decision1': 0}
 
     not_touched_files = []
     total = 0
@@ -248,13 +273,14 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
     elif 'Abalone' in data_set:
         directory = "./real_world_data/abalone/"
     else:
-        directory = f'./simulations/{structure}/{alphabet_size_x}_{alphabet_size_y}'
+        directory = f'./simulations/add_mult/{structure}/{alphabet_size_x}_{alphabet_size_y}'
     if os.path.isdir(directory):
         for file in os.listdir(directory):
             if "_des" not in file and "pairmeta" not in file and "README" not in file:
                 try:
+                    #print(file)
                     some_method_succeeded = False
-                    #file = "pair2.csv"
+                    #file = "pair4.csv"
                     if 'SIM' in data_set:
                         weight = 1.0
                         data = read_synthetic_data(directory, file)
@@ -309,27 +335,37 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
                         #else:
                         #    statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + weight
                         #    statistics['igci']['not_correct_examples'].append(file)
-
-                        if ground_truth == res:
-                            statistics[method]['correct'] = statistics[method]['correct'] + weight
-                            statistics[method]['correct_examples'].append(file)
-                            if 'IACM' in method:
-                                preprocessing_stat[file][method.split('-')[1]]['correct'] = weight
-                            total_method = statistics[method]['correct'] + statistics[method]['not_correct'] + statistics[method]['no_decision']
-                            if verbose: print("correct: " + str(statistics[method]['correct'] / total_method))
-                        elif "no decision" in res:
-                            statistics[method]['no_decision'] = \
-                            statistics[method]['no_decision'] + weight
-                            if 'IACM' in method:
-                                preprocessing_stat[file][method.split('-')[1]]['correct'] = 0
-                            if verbose: print("no decision")
+                        if 'IACM' in method:
+                            for i, re in enumerate(res):
+                                if ground_truth == re:
+                                    statistics[method]['correct' + str(i)] = statistics[method]['correct' + str(i)] + weight
+                                    statistics[method]['correct_examples'].append(file)
+                                elif "no decision" in re:
+                                    statistics[method]['no_decision' + str(i)] = statistics[method]['no_decision' + str(i)] + weight
+                                else:
+                                    statistics[method]['not_correct' + str(i)] = statistics[method]['not_correct' + str(i)] + weight
+                                    statistics[method]['not_correct_examples'].append(file)
                         else:
-                            statistics[method]['not_correct'] = \
-                            statistics[method]['not_correct'] + weight
-                            if 'IACM' in method:
-                                preprocessing_stat[file][method.split('-')[1]]['correct'] = 0
-                            statistics[method]['not_correct_examples'].append(file)
-                            if verbose: print("not correct")
+                            if ground_truth == res:
+                                statistics[method]['correct'] = statistics[method]['correct'] + weight
+                                statistics[method]['correct_examples'].append(file)
+                                if 'IACM' in method:
+                                    preprocessing_stat[file][method.split('-')[1]]['correct'] = weight
+                                total_method = statistics[method]['correct'] + statistics[method]['not_correct'] + statistics[method]['no_decision']
+                                if verbose: print("correct: " + str(statistics[method]['correct'] / total_method))
+                            elif "no decision" in res:
+                                statistics[method]['no_decision'] = \
+                                statistics[method]['no_decision'] + weight
+                                if 'IACM' in method:
+                                    preprocessing_stat[file][method.split('-')[1]]['correct'] = 0
+                                if verbose: print("no decision")
+                            else:
+                                statistics[method]['not_correct'] = \
+                                statistics[method]['not_correct'] + weight
+                                if 'IACM' in method:
+                                    preprocessing_stat[file][method.split('-')[1]]['correct'] = 0
+                                statistics[method]['not_correct_examples'].append(file)
+                                if verbose: print("not correct")
                         #if 'IACM' in method:
                             #for k,v in stats.items():
                             #    preprocessing_stat[file][method.split('-')[1]][k] = v
@@ -353,20 +389,30 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
 structure_list = ['linear_discrete', 'nonlinear_discrete', 'linear_continuous', 'nonlinear_continuous']
 
 if __name__ == '__main__':
-    structure = 'linear_discrete'
+    structure = 'nonlinear_discrete'
     nr_simulations = 100
     sample_sizes = [100, 500, 1000]
     base = 2
-    #run_simulations(structure=structure, sample_sizes=sample_sizes, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, nr_simulations=nr_simulations)
+
+    # data generation
+    # for size_x in range(2, 3):
+    #     for size_y in range(2, 3):
+    #         alphabet_size_x = size_x
+    #         alphabet_size_y = size_y
+    #         run_simulations(structure=structure, sample_sizes=sample_sizes, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, nr_simulations=nr_simulations)
+
     # ['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
-    #for size_x in range(2, 3):
-    #    for size_y in range(3, 7):
-    alphabet_size_x = 2
-    alphabet_size_y = 2
-    methods = ['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
-    print("alphabet;bins;cluster;base;" + ";".join(methods))
-    for bins in range(18, 29):
-        for clt in range(bins-3, (bins + 1)):
-            params[base]['bins'] = bins
-            params[base]['nb_cluster'] = clt
-            run_inference(method_list=methods, data_set='own_sim', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
+    for size_x, size_y in [(4,4)]:
+        alphabet_size_x = size_x
+        alphabet_size_y = size_y
+        params[base]['bins'] = 2
+        params[base]['nb_cluster'] = 2
+        methods = ['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
+        #run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
+        methods = ['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
+        print("alphabet;bins;cluster;base;" + ";".join(methods))
+        for bins in range(2, 10):
+            for clt in range(2, (bins + 1)):
+                params[base]['bins'] = bins
+                params[base]['nb_cluster'] = clt
+                run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)

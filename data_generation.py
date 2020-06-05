@@ -16,17 +16,30 @@ def get_random_number(sample_size):
 
 def get_nonlinear_function():
     function_index = np.random.randint(low=1, high=4, size=1)
-    if function_index == 1:
-        return lambda x, n: np.max(x, 0) + n
-    elif function_index == 2:
-        return lambda x, n: np.sin(2*np.pi*x) + n
-    elif function_index == 3:
-        return lambda x, n: np.sign(x)*np.sqrt(np.abs(x)) + n
+    noise_model = np.random.randint(low=1,high=3, size=1)
+    if noise_model == 1:
+        if function_index == 1:
+            return lambda x, n: np.max(x, 0) + n
+        elif function_index == 2:
+            return lambda x, n: np.sin(2*np.pi*x) + n
+        elif function_index == 3:
+            return lambda x, n: np.sign(x)*np.sqrt(np.abs(x)) + n
+    else:
+        if function_index == 1:
+            return lambda x, n: np.max(x, 0) * n
+        elif function_index == 2:
+            return lambda x, n: np.sin(2*np.pi*x) * n
+        elif function_index == 3:
+            return lambda x, n: np.sign(x)*np.sqrt(np.abs(x)) * n
 
 
 def get_linear_function():
     alpha = np.random.normal(0, 10, 1)
-    return lambda x, n: alpha*x + n
+    noise_model = np.random.randint(low=1, high=3, size=1)
+    if noise_model == 1:
+        return lambda x, n: alpha*x + n
+    else:
+        return lambda x, n: alpha * x * n
 
 
 def generate_discrete_data(structure, sample_size, alphabet_size_x, alphabet_size_y):
