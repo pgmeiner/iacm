@@ -102,7 +102,7 @@
 }
 
 @article{HJMPS09,
-	author={Hoyer, P and Janzing, Dominik and Mooij, Joris and Peters, Jonas and Scholkopf, Bernhard},
+	author={Hoyer, P and Janzing, Dominik and Mooij, Joris and Peters, Jonas and Schölkopf, Bernhard},
 	title={Nonlinear causal discovery with additive noise models},
 	journal={In Neural Information Processing Systems (NIPS)},
 	pages={689-696},
@@ -110,7 +110,7 @@
 }
 
 @article{PJS11,
-	author={Peters, J and Janzing, D and Scholkopf, B},
+	author={Peters, J and Janzing, D and Schölkopf, B},
 	title={Causal Inference on Discrete Data Using Additive Noise Models},
 	journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
 	volume={33},
@@ -182,7 +182,6 @@
       address = "Berlin, Boston",
       volume = "6",
       number = "2",
-      pages:      "20170016",
       url = "https://www.degruyter.com/view/journals/jci/6/2/article-20170016.xml"
 }
 
@@ -199,4 +198,32 @@
 	eprint = {https://rss.onlinelibrary.wiley.com/doi/pdf/10.1111/rssb.12167},
 	abstract = {Summary What is the difference between a prediction that is made with a causal model and that with a non-causal model? Suppose that we intervene on the predictor variables or change the whole environment. The predictions from a causal model will in general work as well under interventions as for observational data. In contrast, predictions from a non-causal model can potentially be very wrong if we actively intervene on variables. Here, we propose to exploit this invariance of a prediction under a causal model for causal inference: given different experimental settings (e.g. various interventions) we collect all models that do show invariance in their predictive accuracy across settings and interventions. The causal model will be a member of this set of models with high probability. This approach yields valid confidence intervals for the causal relationships in quite general scenarios. We examine the example of structural equation models in more detail and provide sufficient assumptions under which the set of causal predictors becomes identifiable. We further investigate robustness properties of our approach under model misspecification and discuss possible extensions. The empirical properties are studied for various data sets, including large-scale gene perturbation experiments.},
 	year = {2016}
+}
+
+@article{DJMZSZS10,
+	author = {Daniu\v{s}is, Povilas and Janzing, Dominik and Mooij, Joris and Zscheischler, Jakob and Steudel, Bastian and Zhang, Kun and Sch\"{o}lkopf, Bernhard},
+	title = {Inferring Deterministic Causal Relations},
+	year = {2010},
+	isbn = {9780974903965},
+	publisher = {AUAI Press},
+	address = {Arlington, Virginia, USA},
+	journal = {Proceedings of the Twenty-Sixth Conference on Uncertainty in Artificial Intelligence},
+	pages = {143–150},
+	numpages = {8},
+	location = {Catalina Island, CA},
+	series = {UAI’10}
+}
+
+@article{JBGS13,
+ ISSN = {00905364},
+ URL = {http://www.jstor.org/stable/23566552},
+ abstract = {Many methods for causal inference generate directed acyclic graphs (DAGs) that formalize causal relations between n variables. Given the joint distribution on all these variables, the DAG contains all information about how intervening on one variable changes the distribution of the other n — 1 variables. However, quantifying the causal influence of one variable on another one remains a nontrivial question. Here we propose a set of natural, intuitive postulates that a measure of causal strength should satisfy. We then introduce a communication scenario, where edges in a DAG play the role of channels that can be locally corrupted by interventions. Causal strength is then the relative entropy distance between the old and the new distribution. Many other measures of causal strength have been proposed, including average causal effect, transfer entropy, directed information, and information flow. We explain how they fail to satisfy the postulates on simple DAGs of ≤ 3 nodes. Finally, we investigate the behavior of our measure on time-series, supporting our claims with experiments on simulated data.},
+ author = {Janzing, Dominik and Balduzzi, David and Grosse-Wentrup, Morith and Schölkopf, Bernhard},
+ journal = {The Annals of Statistics},
+ number = {5},
+ pages = {2324--2358},
+ publisher = {Institute of Mathematical Statistics},
+ title = {QUANTIFYING CAUSAL INFLUENCES},
+ volume = {41},
+ year = {2013}
 }

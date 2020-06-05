@@ -1,0 +1,105 @@
+\newcommand{\etalchar}[1]{$^{#1}$}
+\providecommand{\bysame}{\leavevmode\hbox to3em{\hrulefill}\thinspace}
+\providecommand{\MR}{\relax\ifhmode\unskip\space\fi MR }
+% \MRhref is called by the amsart/book/proc definition of \MR.
+\providecommand{\MRhref}[2]{%
+  \href{http://www.ams.org/mathscinet-getitem?mr=#1}{#2}
+}
+\providecommand{\href}[2]{#2}
+\begin{thebibliography}{JBGWS13}
+
+\bibitem[BJW{\etalchar{+}}18]{BJWSS18}
+P.~Bloebaum, D.~Janzing, T.~Washio, S.~Shimizu, and B.~Schoelkopf,
+  \emph{Cause-effect inference by comparing regression errors}, International
+  Conference on Artificial Intelligence and Statistics (2018), 900--909.
+
+\bibitem[BV17]{BV17}
+K.~Budhathoki and J.~Vreeken, \emph{{MDL} for causal inference on discrete
+  data}, 2017 IEEE International Conference on Data Mining (ICDM) (2017),
+  751--756.
+
+\bibitem[BV18]{BV18}
+\bysame, \emph{Accurate causal inference on discrete data}, 2018 IEEE
+  International Conference on Data Mining (ICDM) (2018), 881--886.
+
+\bibitem[CLRS01]{CLRS01}
+T.~H. Cormen, C.~E. Leiserson, R.~L. Rivest, and C.~Stein, \emph{Introduction
+  to algorithms}, MIT Press, Cambridge, 2001.
+
+\bibitem[CQZ{\etalchar{+}}18]{CQZZH18}
+R.~Cai, J.~Qiao, K.~Zhang, Z.~Zhang, and Z.~Hao, \emph{Causal discovery from
+  discrete data using hidden compact representation}, Adv Neural Inf Process
+  Syst (2018), 2666‐2674.
+
+\bibitem[CT91]{CT91}
+T.~Cover and J.~Thomas, \emph{Elements of information theory}, John Wiley and
+  Sons, 1991.
+
+\bibitem[DG19]{DG19}
+D.~Dua and C.~Graff, \emph{{UCI} machine learning repository}, 2019.
+
+\bibitem[DJM{\etalchar{+}}10]{DJMZSZS10}
+P.~Daniu\v{s}is, D.~Janzing, J.~Mooij, J.~Zscheischler, B.~Steudel, K.~Zhang,
+  and B.~Sch\"{o}lkopf, \emph{Inferring deterministic causal relations},
+  Proceedings of the Twenty-Sixth Conference on Uncertainty in Artificial
+  Intelligence (2010), 143–150.
+
+\bibitem[Fon19]{F16}
+J.~Fonollosa, \emph{Conditional distribution variability measures for causality
+  detection}, Cause Effect Pairs in Machine Learning (I.~Guyon, A.~Statnikov,
+  and B.~Batu, eds.), Springer, 2019.
+
+\bibitem[HDPM18]{HPM18}
+C.~Heinze-Deml, J.~Peters, and N.~Meinshausen, \emph{Invariant causal
+  prediction for nonlinear models}, Journal of Causal Inference \textbf{6}
+  (2018), no.~2.
+
+\bibitem[HJM{\etalchar{+}}09]{HJMPS09}
+P.~Hoyer, D.~Janzing, J.~Mooij, J.~Peters, and B.~Schölkopf, \emph{Nonlinear
+  causal discovery with additive noise models}, In Neural Information
+  Processing Systems (NIPS) (2009), 689--696.
+
+\bibitem[JBGWS13]{JBGS13}
+D.~Janzing, D.~Balduzzi, M.~Grosse-Wentrup, and B.~Schölkopf,
+  \emph{Quantifying causal influences}, The Annals of Statistics \textbf{41}
+  (2013), no.~5, 2324--2358.
+
+\bibitem[JMZ{\etalchar{+}}12]{JMZLZDSS12}
+D.~Janzing, J.~Mooij, K.~Zhang, J.~Lemeire, J.~Zscheischler, P.~Daniušis,
+  B.~Steudel, and B.~Schölkopf, \emph{Information-geometric approach to
+  inferring causal directions}, Artificial Intelligence \textbf{182-183}
+  (2012), 1--31.
+
+\bibitem[Kak99]{Kak99}
+Y.~Kakihara, \emph{Abstract methods in information theory}, World Scientific
+  Publishing Co. Pte. Ltd., 1999.
+
+\bibitem[KG19]{KG19}
+D.~Kalainathan and O.~Goudet, \emph{Causal discovery toolbox: Uncover causal
+  relationships in python}.
+
+\bibitem[MPJ{\etalchar{+}}16]{MPJZS16}
+J.~Mooij, J.~Peters, D.~Janzing, J.~Zscheischler, and S.~B.,
+  \emph{Distinguishing cause from effect using observational data: methods and
+  benchmarks}, Journal of Machine Learning Research 17 (2016), 1--102.
+
+\bibitem[PBM16]{PBM16}
+J.~Peters, P.~Bühlmann, and N.~Meinshausen, \emph{Causal inference by using
+  invariant prediction: identification and confidence intervals}, Journal of
+  the Royal Statistical Society: Series B (Statistical Methodology) \textbf{78}
+  (2016), no.~5, 947--1012.
+
+\bibitem[Pea09]{Pea09}
+J.~Pearl, \emph{Causality, models, reasoning, and inference}, Cambridge
+  University Press, 2009.
+
+\bibitem[PJS11]{PJS11}
+J.~Peters, D.~Janzing, and B.~Schölkopf, \emph{Causal inference on discrete
+  data using additive noise models}, IEEE Transactions on Pattern Analysis and
+  Machine Intelligence \textbf{33} (2011), 2436--2450.
+
+\bibitem[PJS17]{PJS17}
+J.~Peters, D.~Janzing, and B.~Schölkopf, \emph{Elements of causal inference},
+  MIT Press, 2017.
+
+\end{thebibliography}

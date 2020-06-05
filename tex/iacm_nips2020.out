@@ -1,0 +1,14 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Causal Models}{}% 2
+\BOOKMARK [1][-]{section.3}{Approximation to Causal Models}{}% 3
+\BOOKMARK [2][-]{subsection.3.1}{The General Case}{section.3}% 4
+\BOOKMARK [2][-]{subsection.3.2}{The Binary Case}{section.3}% 5
+\BOOKMARK [2][-]{subsection.3.3}{Implementation}{section.3}% 6
+\BOOKMARK [1][-]{section.4}{Applications}{}% 7
+\BOOKMARK [2][-]{subsection.4.1}{Probabilities for Causes}{section.4}% 8
+\BOOKMARK [2][-]{subsection.4.2}{Causal Discovery}{section.4}% 9
+\BOOKMARK [1][-]{section.5}{Experiments}{}% 10
+\BOOKMARK [2][-]{subsection.5.1}{Pairwise Causal Discovery Methods}{section.5}% 11
+\BOOKMARK [2][-]{subsection.5.2}{Synthetic Data}{section.5}% 12
+\BOOKMARK [2][-]{subsection.5.3}{Real-World Data}{section.5}% 13
+\BOOKMARK [1][-]{section.6}{Discussion}{}% 14
