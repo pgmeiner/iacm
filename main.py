@@ -1,17 +1,16 @@
 import os
 import numpy as np
 import pandas as pd
-from iacm import iacm_discovery, iacm_timeseries
+from iacm.iacm import iacm_discovery, iacm_timeseries
 from code_extern.cisc_master.cisc import cisc
 import warnings
 #from code_extern.cisc_master.dr import dr
 from code_extern.cisc_master.entropic import entropic
-from data_preparation import read_data, read_synthetic_data
+from iacm.data_preparation import read_data, read_synthetic_data
 from scipy.stats import spearmanr
-from plot import plot_distributions
 import cdt
-from data_generation import generate_nonlinear_data, generate_discrete_data, generate_continuous_data, generate_nonlinear_confounded_data, generate_linear_confounded_data, generate_linear_data
-from sklearn.preprocessing import StandardScaler, RobustScaler
+from iacm.data_generation import generate_discrete_data, generate_continuous_data
+from sklearn.preprocessing import RobustScaler
 
 
 def print_statisticts(statistics):
@@ -30,34 +29,18 @@ def print_statisticts(statistics):
 
 
 params = {2: {'bins': 2,
-              'x_shift': 0,
-              'y_shift': 0,
               'nb_cluster': 2,
-              'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3,
               'monotone': True},
           3: {'bins': 2,
-              'x_shift': 0,
-              'y_shift': 0,
               'nb_cluster': 3,
-              'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3,
               'monotone': True
               },
           4: {'bins': 9,
-              'x_shift': 0,
-              'y_shift': 0,
               'nb_cluster': 2,
-              'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3,
               'monotone': False
               },
           5: {'bins': 2,
-              'x_shift': 0,
-              'y_shift': 0,
               'nb_cluster': 2,
-              'prob_threshold_cluster': 0.7,
-              'prob_threshold_no_cluster': 0.3,
               'monotone': False
               }
           }
@@ -226,9 +209,9 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
         preprocessing_stat[file][preprocess_method] = dict()
 
         if file in timeseries_files:
-            res, crit = iacm_timeseries(base_x=base_x, base_y=base_y, data=data, params=params[base_x], max_lag=50, verbose=verbose)
+            res, crit = iacm_timeseries(base_x=base_x, base_y=base_y, data=data, parameters=params[base_x], max_lag=50, verbose=verbose)
         else:
-            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, params=params[base_x], verbose=verbose, preserve_order=False)
+            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, parameters=params[base_x], verbose=verbose, preserve_order=False)
 
         # plot_distributions()
         #statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
@@ -411,8 +394,8 @@ if __name__ == '__main__':
         #run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
         methods = ['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
         print("alphabet;bins;cluster;base;" + ";".join(methods))
-        for bins in range(2, 10):
-            for clt in range(2, (bins + 1)):
+        for bins in range(8, 10):
+            for clt in range(bins, (bins + 1)):
                 params[base]['bins'] = bins
                 params[base]['nb_cluster'] = clt
-                run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
+                run_inference(method_list=methods, data_set='own_sim', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)

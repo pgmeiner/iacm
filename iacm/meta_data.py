@@ -1,7 +1,5 @@
 from typing import Dict
-
 import numpy as np
-
 from utils import insert, flatten, count_char
 
 
@@ -57,7 +55,7 @@ def generate_pattern_data(base: int, nb_interventions: int) -> Dict:
 
     # generate constraint_patterns
     constraint_patterns = list()
-    for intervention in range(1,base):
+    for intervention in range(1, base):
         for position in range(0, nb_interventions):
             constraint_patterns.append(insert(pattern_template, str(intervention), total_len - position))
 
@@ -139,7 +137,7 @@ def replace_char_by_char(char_to_replaced, str_to_be_replaced, to_be_inserted_st
     return final_str
 
 
-def marginalDistribution(P, fixed_code):
+def marginal_distribution(p, fixed_code):
     nb_x = count_char(fixed_code, 'x')
     format_str = '{0:0xb}'.replace('x', str(nb_x))
-    return sum([P[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0, pow(2, nb_x))])
+    return sum([p[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0, pow(2, nb_x))])

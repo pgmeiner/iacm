@@ -1,8 +1,9 @@
 from typing import List
-from metrics import KL_Dist, entropy
+from iacm.metrics import kl_divergence, entropy
 import numpy as np
 import cvxpy as cp
-from data_preparation import getContingencyTables, get_probabilities, get_probabilities_intervention
+from iacm.data_preparation import get_contingency_table, get_probabilities, get_probabilities_intervention
+from plot import plot_distribution
 
 
 def CalcIterativeProjectionToHypergraph(G: List[List[int]], n: int, P: List[float], MaxIter: int):
@@ -50,6 +51,7 @@ def CalcMarginalDistributionA(P: List[float], A: List[int], n: int) -> List[floa
 
     return RetVal
 
+
 def calc_distance_to_independent_graph(pxy, pxny, pnxy, pnxny, py_x, py_nx, pny_x, pny_nx, color):
     x = max_entropy_with_marginal_constraints(pxy, pxny, pnxy, pnxny, py_x, py_nx, pny_x, pny_nx)
     G = [[1], [2]]
@@ -62,7 +64,7 @@ def calc_distance_to_independent_graph(pxy, pxny, pnxy, pnxny, py_x, py_nx, pny_
     px = [pxy + pxny, pnxy + pnxny]
     py = [pxy + pnxy, pxny + pnxny]
     # local_mi = entropy(px) + entropy(py) - entropy([pxy, pxny, pnxy, pnxny])
-    kl_dist = KL_Dist(P, Q)
+    kl_dist = kl_divergence(P, Q)
     if color != "":
         plot_distribution(pxy=pxy, pxny=pxny, pnxy=pnxy, pnxny=pnxny, color=color)
     print("independent distribution")
@@ -90,6 +92,7 @@ def calc_distance_to_independent_graph(pxy, pxny, pnxy, pnxny, py_x, py_nx, pny_
     #     return local_mi
     #
     # return None
+
 
 def max_entropy_with_marginal_constraints(pxy, pxny, pnxy, pnxny, py_x, py_nx, pny_x, pny_nx):
     # Matrix size parameters.
@@ -137,9 +140,10 @@ def max_entropy_with_marginal_constraints(pxy, pxny, pnxy, pnxny, py_x, py_nx, p
 
     return x
 
+
 def testIndpendentendModel(obsX, obsY, intX, intY, color):
-    ExperimentContigenceTable = getContingencyTables(intX, intY)
-    ObservationContigenceTable = getContingencyTables(obsX, obsY)
-    Pxy, Pxny, Pnxy, Pnxny = get_probabilities(ObservationContigenceTable, base=2)
-    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention(ExperimentContigenceTable, base=2)
+    ExperimentContigenceTable = get_contingency_table(intX, intY, 2, 2)
+    ObservationContigenceTable = get_contingency_table(obsX, obsY, 2, 2)
+    Pxy, Pxny, Pnxy, Pnxny = get_probabilities(ObservationContigenceTable, 2, 2)
+    Py_x, Py_nx, Pny_x, Pny_nx = get_probabilities_intervention(ExperimentContigenceTable, 2, 2)
     return calc_distance_to_independent_graph(Pxy, Pxny, Pnxy, Pnxny, Py_x, Py_nx, Pny_x, Pny_nx, color)

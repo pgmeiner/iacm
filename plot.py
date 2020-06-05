@@ -2,6 +2,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
+
 def init_figure():
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -51,6 +52,7 @@ def plot_distribution(pxy, pxny, pnxy, pnxny, color):
     scatter_points[color]['y'].append(y)
     scatter_points[color]['z'].append(z)
     # ax.scatter([x], [y], [z], color=color, linewidth=1)
+
 
 def plot_distributions():
     for color in ['black', 'green', 'yellow', 'red']:
