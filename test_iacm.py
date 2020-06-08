@@ -5,26 +5,10 @@ from iacm.data_generation import generate_discrete_data, generate_continuous_dat
 from iacm.iacm import iacm_discovery
 
 
-params = {2: {'bins': 2,
+parameters = {'bins': 2,
               'nb_cluster': 2,
               'monotone': True,
-              'preprocess_method': 'cluster_discrete'},
-          3: {'bins': 2,
-              'nb_cluster': 3,
-              'monotone': True,
-              'preprocess_method': 'cluster_discrete'
-              },
-          4: {'bins': 9,
-              'nb_cluster': 2,
-              'monotone': False,
-              'preprocess_method': 'cluster_discrete'
-              },
-          5: {'bins': 2,
-              'nb_cluster': 2,
-              'monotone': False,
-              'preprocess_method': 'cluster_discrete'
-              }
-          }
+              'preprocess_method': 'cluster_discrete'}
 
 structure_list = ['linear_discrete', 'nonlinear_discrete', 'linear_continuous', 'nonlinear_continuous']
 
@@ -45,11 +29,8 @@ if __name__ == '__main__':
         obsX, obsY, intX, intY = generate_continuous_data(structure=structure, sample_size=max_samples)
         data = pd.DataFrame({'X': np.concatenate([obsX, intX]), 'Y': np.concatenate([obsY, intY])})
 
-    res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, parameters=params[base_x], verbose=False,
-                               preserve_order=False)
+    res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, auto_configuration=True,
+                               parameters=parameters, verbose=False, preserve_order=False)
 
     print("Ground Truth: X->Y")
-    print("IACM Causal Discovery result using approximation error: " +
-          res[0] + " (error: " + str(crit[0]) + ")")
-    print("IACM Causal Discovery result using information distance between X and Y: " +
-          res[1] + " (distance: " + str(crit[1]) + ")")
+    print("IACM Causal Discovery using auto configuration: " + res + " (error: " + str(crit) + ")")

@@ -56,14 +56,10 @@ def get_ground_truth(content):
 def get_stat_entry(data):
     if 'correct0' in data:
         total_number0 = data['correct0'] + data['not_correct0'] + data['no_decision0']
-        total_number1 = data['correct1'] + data['not_correct1'] + data['no_decision1']
         if total_number0 > 0:
             return str(round(data['correct0'] / total_number0 * 100, 2)) + " (" + str(
                 round(data['correct0'], 2)) + "," + str(round(data['not_correct0'], 2)) + "," + str(
-                round(data['no_decision0'], 2)) + "/" + str(round(total_number0, 2)) + ") " + str(
-                round(data['correct1'] / total_number1 * 100, 2)) + " (" + str(
-                round(data['correct1'], 2)) + "," + str(round(data['not_correct1'], 2)) + "," + str(
-                round(data['no_decision1'], 2)) + "/" + str(round(total_number1, 2)) + ")"
+                round(data['no_decision0'], 2)) + "/" + str(round(total_number0, 2)) + ") "
         else:
             total_number = data['correct'] + data['not_correct'] + data['no_decision']
             if total_number > 0:
@@ -190,13 +186,6 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
     elif 'IACM' in method:
         if 'monotone' in method:
             params[base_x]['monotone'] = True
-        else:
-            with np.errstate(invalid='ignore'):
-                stat_s, p_s = spearmanr(data['X'], data['Y'])
-                if abs(stat_s) >= 0.7 and p_s <= 0.01:
-                    params[base_x]['monotone'] = True
-                else:
-                    params[base_x]['monotone'] = False
 
         if file not in preprocessing_stat.keys():
             preprocessing_stat[file] = dict()
@@ -211,7 +200,7 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
         if file in timeseries_files:
             res, crit = iacm_timeseries(base_x=base_x, base_y=base_y, data=data, parameters=params[base_x], max_lag=50, verbose=verbose)
         else:
-            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, parameters=params[base_x], verbose=verbose, preserve_order=False)
+            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, auto_configuration=True, parameters=params[base_x], verbose=verbose, preserve_order=False)
 
         # plot_distributions()
         #statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
@@ -319,15 +308,14 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
                         #    statistics['igci']['not_correct'] = statistics['igci']['not_correct'] + weight
                         #    statistics['igci']['not_correct_examples'].append(file)
                         if 'IACM' in method:
-                            for i, re in enumerate(res):
-                                if ground_truth == re:
-                                    statistics[method]['correct' + str(i)] = statistics[method]['correct' + str(i)] + weight
-                                    statistics[method]['correct_examples'].append(file)
-                                elif "no decision" in re:
-                                    statistics[method]['no_decision' + str(i)] = statistics[method]['no_decision' + str(i)] + weight
-                                else:
-                                    statistics[method]['not_correct' + str(i)] = statistics[method]['not_correct' + str(i)] + weight
-                                    statistics[method]['not_correct_examples'].append(file)
+                            if ground_truth == res:
+                                statistics[method]['correct0'] = statistics[method]['correct0'] + weight
+                                statistics[method]['correct_examples'].append(file)
+                            elif "no decision" in res:
+                                statistics[method]['no_decision0'] = statistics[method]['no_decision0'] + weight
+                            else:
+                                statistics[method]['not_correct0'] = statistics[method]['not_correct0'] + weight
+                                statistics[method]['not_correct_examples'].append(file)
                         else:
                             if ground_truth == res:
                                 statistics[method]['correct'] = statistics[method]['correct'] + weight
@@ -385,16 +373,16 @@ if __name__ == '__main__':
     #         run_simulations(structure=structure, sample_sizes=sample_sizes, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, nr_simulations=nr_simulations)
 
     # ['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
-    for size_x, size_y in [(4,4)]:
+    for size_x, size_y in [(10,10), (20,20), (100,100)]:
         alphabet_size_x = size_x
         alphabet_size_y = size_y
         params[base]['bins'] = 2
         params[base]['nb_cluster'] = 2
         methods = ['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
         #run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
-        methods = ['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
+        methods = ['IACM-auto']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
         print("alphabet;bins;cluster;base;" + ";".join(methods))
-        for bins in range(8, 10):
+        for bins in range(8, 9):
             for clt in range(bins, (bins + 1)):
                 params[base]['bins'] = bins
                 params[base]['nb_cluster'] = clt

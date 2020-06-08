@@ -7,6 +7,7 @@ from iacm.data_preparation import get_probabilities, get_probabilities_intervent
 from iacm.meta_data import setup_meta_data, base_repr
 from typing import List, Dict, Tuple, Any
 from iacm.metrics import kl_divergence
+from scipy.stats import spearmanr
 
 meta_data = dict()
 meta_data['2_2'] = setup_meta_data(base=2, nb_variables=4)
@@ -327,9 +328,50 @@ def decide_best_model(model_x_to_y: Dict[str, Any], model_y_to_x: Dict[str, Any]
     return best_model
 
 
-def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, parameters: Dict[str, Any], verbose: bool,
-                   preserve_order: bool) -> Tuple[Tuple[str, str], Tuple[float, float]]:
+def get_auto_configuration(data: pd.DataFrame) -> Dict[str, Any]:
+    alphabet_x = set(data['X'].tolist())
+    alphabet_y = set(data['Y'].tolist())
+    nb_alphabet_x = len(alphabet_x)
+    nb_alphabet_y = len(alphabet_y)
+    difference = nb_alphabet_x - nb_alphabet_y
+    parameters = dict()
+    if nb_alphabet_x > 30 and nb_alphabet_y > 30:
+        parameters['preprocess_method'] = 'cluster_discrete'
+        parameters['decision_criteria'] = 'global_error'
+        parameters['bins'] = max(10, int((nb_alphabet_x + nb_alphabet_y) / 20))
+        parameters['nb_cluster'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 30))
+    elif (nb_alphabet_x == 2 and nb_alphabet_y < 5) or (nb_alphabet_x < 5 and nb_alphabet_y == 2):
+        parameters['preprocess_method'] = 'none'
+        parameters['decision_criteria'] = 'global_error'
+        parameters['bins'] = 2
+        parameters['nb_cluster'] = 2
+    elif difference < 0:
+        parameters['preprocess_method'] = 'discrete_cluster'
+        parameters['decision_criteria'] = 'kl_xy'
+        parameters['bins'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 2))
+        parameters['nb_cluster'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 2))
+    elif difference >= 0:
+        parameters['preprocess_method'] = 'discrete_cluster'
+        parameters['decision_criteria'] = 'global_error'
+        parameters['bins'] = max(2, int((nb_alphabet_x + nb_alphabet_y)))
+        parameters['nb_cluster'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 2))
+
+    with np.errstate(invalid='ignore'):
+        stat_s, p_s = spearmanr(data['X'], data['Y'])
+        if abs(stat_s) >= 0.7 and p_s <= 0.01:
+            parameters['monotone'] = True
+        else:
+            parameters['monotone'] = False
+
+    return parameters
+
+
+def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool, parameters: Dict[str, Any],
+                   verbose: bool, preserve_order: bool) -> Tuple[Tuple[str, str], Tuple[float, float]]:
+    if auto_configuration:
+        parameters = get_auto_configuration(data)
     monotone = (parameters['monotone'] and base_x == 2 and base_y == 2)
+
     x_obs_x, x_obs_y, x_int_x, x_int_y = preprocessing(data=data, intervention_column='X',
                                                        preserve_order=preserve_order, parameters=parameters)
     data_xy = pd.concat([pd.concat([x_obs_x, x_int_x]), pd.concat([x_obs_y, x_int_y])], axis=1)
@@ -349,7 +391,12 @@ def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, parameters: Dic
         result = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, strategy='kl_dist')
         result_xy = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, strategy='kl_dist')
 
-    return (result['result'], result_xy['result']), (result['min_error'], result_xy['min_error'])
+    if parameters['decision_criteria'] == 'global_error':
+        return result['result'], result['min_error']
+    elif parameters['decision_criteria'] == 'kl_xy':
+        return result_xy['result'], result_xy['min_error']
+    else:
+        return (result['result'], result_xy['result']), (result['min_error'], result_xy['min_error'])
 
 
 def iacm_timeseries(base_x: int, base_y: int, data: pd.DataFrame, parameters: Dict[str, Any], max_lag: int,
