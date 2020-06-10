@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import t
-from typing import Callable, Tuple, Any
+from typing import Callable
 
 
 def get_discrete_random_number(sample_size: int, alphabet_size: int) -> int:
@@ -46,6 +46,14 @@ def get_linear_function() -> Callable[[np.array, np.array], np.array]:
 
 def generate_discrete_data(structure: str, sample_size: int, alphabet_size_x: int,
                            alphabet_size_y: int) -> pd.DataFrame:
+    """
+    Function that generates samples of discrete data following an underlying causal model X->Y.
+    :param structure: specifies the function used for generating Y. Can be either 'linear' or 'nonlinear'.
+    :param sample_size: number of samples to generate.
+    :param alphabet_size_x: range size of random variable X.
+    :param alphabet_size_y: range size of random variable Y.
+    :return: pandas dataframe with columns 'X', 'Y' containing the generated sample data.
+    """
     if 'nonlinear' in structure:
         f = get_nonlinear_function()
     else:
@@ -73,7 +81,13 @@ def generate_discrete_data(structure: str, sample_size: int, alphabet_size_x: in
         {'X': [el[0] for el in np.concatenate([obs_x, int_x])], 'Y': [el[0] for el in np.concatenate([obs_y, int_y])]})
 
 
-def generate_continuous_data(structure: str, sample_size: int) -> Tuple[Any, Any, Any, Any]:
+def generate_continuous_data(structure: str, sample_size: int) -> pd.DataFrame:
+    """
+    Function that generates samples of continuous data following an underlying causal model X->Y.
+    :param structure: specifies the function used for generating Y. Can be either 'linear' or 'nonlinear'.
+    :param sample_size: number of samples to generate.
+    :return: pandas dataframe with columns 'X', 'Y' containing the generated sample data.
+    """
     if 'nonlinear' in structure:
         f = get_nonlinear_function()
     else:
@@ -90,5 +104,5 @@ def generate_continuous_data(structure: str, sample_size: int) -> Tuple[Any, Any
                             get_random_number(sample_size=nb_interventions).tolist()])
     int_y = f(int_x, get_random_number(nb_samples)).reshape(1, -1)
 
-    return obs_x.reshape(nb_samples, ), obs_y.reshape(nb_samples, ), int_x.reshape(nb_samples, ), int_y.reshape(
-        nb_samples, )
+    return pd.DataFrame({'X': np.concatenate([obs_x.reshape(nb_samples, ), int_x.reshape(nb_samples, )]),
+                         'Y': np.concatenate([obs_y.reshape(nb_samples, ), int_y.reshape(nb_samples, )])})

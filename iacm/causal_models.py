@@ -3,18 +3,18 @@ import numpy as np
 from utils import insert, flatten, count_char
 
 
-def setup_meta_data(base, nb_variables, monotone_incr=False, monotone_decr=False):
-    meta_data = dict()
+def setup_model_data(base, nb_variables, monotone_incr=False, monotone_decr=False):
+    model_data = dict()
     size_prob = pow(base, nb_variables)
-    meta_data['base_x'] = base
-    meta_data['nb_variables'] = nb_variables
-    meta_data['size_prob'] = size_prob
+    model_data['base_x'] = base
+    model_data['nb_variables'] = nb_variables
+    model_data['size_prob'] = size_prob
 
     pattern_data = generate_pattern_data(base=base, nb_interventions=nb_variables-2)
-    meta_data['constraint_patterns'] = pattern_data[base]['constraint_patterns']
+    model_data['constraint_patterns'] = pattern_data[base]['constraint_patterns']
 
     lines = generate_constraint_lines(pattern_data[base]['constraint_patterns'], size_prob, base)
-    meta_data['B'] = np.array([[1] * size_prob] + lines)
+    model_data['B'] = np.array([[1] * size_prob] + lines)
 
     zero_codes = get_zero_codes(pattern_data[base]['zero_code_patterns'], base)
     if monotone_decr:
@@ -23,19 +23,19 @@ def setup_meta_data(base, nb_variables, monotone_incr=False, monotone_decr=False
     if monotone_incr:
         zero_codes.append('0110')
         zero_codes.append('1010')
-    meta_data['S_codes'] = s_codes(zero_codes, base, nb_variables)
+    model_data['S_codes'] = s_codes(zero_codes, base, nb_variables)
     d_list = list()
     for i in range(0, size_prob):
-        if base_repr(i, base, nb_variables) in meta_data['S_codes']:
+        if base_repr(i, base, nb_variables) in model_data['S_codes']:
             d_list.append(1)
         else:
             d_list.append(0)
-    meta_data['d'] = np.array(d_list)
+    model_data['d'] = np.array(d_list)
 
-    meta_data['F'] = np.diag(np.array([1] * size_prob))
-    meta_data['c'] = np.array([0.0] * size_prob)
+    model_data['F'] = np.diag(np.array([1] * size_prob))
+    model_data['c'] = np.array([0.0] * size_prob)
 
-    return meta_data
+    return model_data
 
 
 # pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '11xx', '10xx', '01xx'],

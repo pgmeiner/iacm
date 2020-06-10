@@ -2,25 +2,25 @@ import cvxpy as cp
 import numpy as np
 from math import log2
 import pandas as pd
+from typing import List, Dict, Tuple, Any, Union
 from iacm.data_preparation import get_probabilities, get_probabilities_intervention, write_contingency_table, \
-    get_contingency_table, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels
-from iacm.meta_data import setup_meta_data, base_repr
-from typing import List, Dict, Tuple, Any
-from iacm.metrics import kl_divergence
-from scipy.stats import spearmanr
+    get_contingency_table, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels, \
+    find_best_cluster, find_best_discretization
+from iacm.causal_models import setup_model_data, base_repr
+from iacm.metrics import get_kl_between_x_y, calc_error
 
-meta_data = dict()
-meta_data['2_2'] = setup_meta_data(base=2, nb_variables=4)
-meta_data['2_2_m_d'] = setup_meta_data(base=2, nb_variables=4, monotone_decr=True, monotone_incr=False)
-meta_data['2_2_m_i'] = setup_meta_data(base=2, nb_variables=4, monotone_decr=False, monotone_incr=True)
-meta_data['3_3'] = setup_meta_data(base=3, nb_variables=5)
-meta_data['4_4'] = setup_meta_data(base=4, nb_variables=6)
+model_data = dict()
+model_data['2_2'] = setup_model_data(base=2, nb_variables=4)
+model_data['2_2_m_d'] = setup_model_data(base=2, nb_variables=4, monotone_decr=True, monotone_incr=False)
+model_data['2_2_m_i'] = setup_model_data(base=2, nb_variables=4, monotone_decr=False, monotone_incr=True)
+model_data['3_3'] = setup_model_data(base=3, nb_variables=5)
+model_data['4_4'] = setup_model_data(base=4, nb_variables=6)
 
 
 def get_constraint_data(base_x: int, base_y: int, list_of_distributions) -> Dict[str, float]:
     constraint_data = dict()
 
-    for value, pattern in zip(list_of_distributions, meta_data[str(base_x) + '_' + str(base_y)]['constraint_patterns']):
+    for value, pattern in zip(list_of_distributions, model_data[str(base_x) + '_' + str(base_y)]['constraint_patterns']):
         constraint_data[pattern] = value
 
     return constraint_data
@@ -43,6 +43,32 @@ def get_constraint_distribution(p: Dict[str, float], p_i: Dict[str, float], base
     return constraint_distr
 
 
+def get_model_with_causal_probabilities(constraint_data: Dict[str, float]) -> Dict[str, Any]:
+    modeldata_mon_decr = find_best_approximation_to_model(constraint_data, model_data['2_2_m_d'])
+    modeldata_mon_incr = find_best_approximation_to_model(constraint_data, model_data['2_2_m_i'])
+
+    if (len(modeldata_mon_incr) == 0) and (len(modeldata_mon_decr) == 0):
+        modeldata = dict()
+        pn, ps, pns = 0, 0, 0
+    elif len(modeldata_mon_incr) == 0:
+        modeldata = modeldata_mon_decr
+        pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'decrease')
+    elif len(modeldata_mon_decr) == 0:
+        modeldata = modeldata_mon_incr
+        pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'increase')
+    elif modeldata_mon_incr['GlobalError'] < modeldata_mon_decr['GlobalError']:
+        modeldata = modeldata_mon_incr
+        pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'increase')
+    else:
+        modeldata = modeldata_mon_decr
+        pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'decrease')
+
+    modeldata['PN'] = pn
+    modeldata['PS'] = ps
+    modeldata['PNS'] = pns
+    return modeldata
+
+
 def approximate_to_causal_model(base_x: int, base_y: int,
                                 observation_contingency_table: List[List[int]],
                                 intervention_contingency_table: List[List[int]],
@@ -57,31 +83,11 @@ def approximate_to_causal_model(base_x: int, base_y: int,
             print(key + ":" + str(value))
     constraint_data = get_constraint_data(base_x=base_x, base_y=base_y, list_of_distributions=constraint_distributions)
 
-    meta_data_idx = str(base_x) + '_' + str(base_y)
     if monotone and base_x == 2 and base_y == 2:
-        modeldata_mon_decr = find_best_approximation_to_model(constraint_data, meta_data[meta_data_idx + '_m_d'])
-        modeldata_mon_incr = find_best_approximation_to_model(constraint_data, meta_data[meta_data_idx + '_m_i'])
-
-        if (len(modeldata_mon_incr) == 0) and (len(modeldata_mon_decr) == 0):
-            modeldata = dict()
-            pn, ps, pns = 0, 0, 0
-        elif len(modeldata_mon_incr) == 0:
-            modeldata = modeldata_mon_decr
-            pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'decrease')
-        elif len(modeldata_mon_decr) == 0:
-            modeldata = modeldata_mon_incr
-            pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'increase')
-        elif modeldata_mon_incr['GlobalError'] < modeldata_mon_decr['GlobalError']:
-            modeldata = modeldata_mon_incr
-            pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'increase')
-        else:
-            modeldata = modeldata_mon_decr
-            pn, ps, pns = calculate_causal_probabilities(modeldata['p_tilde'], 'decrease')
-        modeldata['PN'] = pn
-        modeldata['PS'] = ps
-        modeldata['PNS'] = pns
+        modeldata = get_model_with_causal_probabilities(constraint_data)
     else:
-        modeldata = find_best_approximation_to_model(constraint_data, meta_data[meta_data_idx])
+        model_data_idx = str(base_x) + '_' + str(base_y)
+        modeldata = find_best_approximation_to_model(constraint_data, model_data[model_data_idx])
     return modeldata
 
 
@@ -193,55 +199,43 @@ def test_model_from_x_to_y(base_x: int, base_y: int, obs_x: pd.Series, obs_y: pd
                                        monotone, verbose)
 
 
-def local_error(p_nom: float, p_denom: float, s: float) -> float:
-    if p_denom > 0 and p_nom > 0:
-        return 1 / s * p_nom * log2(p_nom / p_denom)
-    elif p_nom == 0:
-        return 0.0
-    elif p_nom > 0:
-        return 1000000.0
-
-
-def calc_error(model_results: Dict[str, Any]) -> float:
-    if "GlobalError" in model_results:
-        return round(model_results["GlobalError"], 6)
-    else:
-        return 1000000.0
-
-
 def preprocessing(data: pd.DataFrame, intervention_column: str, preserve_order: bool, parameters: Dict[str, Any])\
         -> Tuple[Any, Any, Any, Any]:
     if parameters['preprocess_method'] == 'none':
         split_idx = int(data.shape[0] / 2)
         obs_x, obs_y, int_x, int_y = split_data_at_index(data, split_idx)
     elif parameters['preprocess_method'] == 'cluster_discrete':
-        _, clustered_data = cluster_data(data, intervention_column, parameters['nb_cluster'])
-        disc_data = discretize_data(clustered_data, parameters['bins'])
+        if parameters['nb_cluster'] == -1:
+            (_, clustered_data), best_nb_clusters = find_best_cluster(data, intervention_column, parameters['bins'])
+        else:
+            _, clustered_data = cluster_data(data, intervention_column, parameters['nb_cluster'])
+            best_nb_clusters = parameters['nb_cluster']
+        if parameters['bins'] == -1:
+            disc_data = find_best_discretization(data)
+        else:
+            disc_data = discretize_data(data, parameters['bins'])
         disc_data['labels'] = clustered_data['labels']
         if preserve_order:
             obs_x, obs_y, int_x, int_y, i_max = split_data(disc_data, 'labels', sort_data=False)
         else:
-            obs_x, obs_y, int_x, int_y = split_at_clustered_labels(disc_data, intervention_column,
-                                                                   parameters['nb_cluster'])
+            obs_x, obs_y, int_x, int_y = split_at_clustered_labels(disc_data, intervention_column, best_nb_clusters)
     elif parameters['preprocess_method'] == 'discrete_cluster':
-        disc_data = discretize_data(data, parameters['bins'])
-        (obs_x, obs_y, int_x, int_y), clustered_data = cluster_data(disc_data, intervention_column,
-                                                                    parameters['nb_cluster'])
+        if parameters['bins'] == -1:
+            disc_data = find_best_discretization(data)
+        else:
+            disc_data = discretize_data(data, parameters['bins'])
+        if parameters['nb_cluster'] == -1:
+            ((obs_x, obs_y, int_x, int_y), clustered_data), _ = find_best_cluster(disc_data, intervention_column,
+                                                                                  parameters['bins'])
+        else:
+            (obs_x, obs_y, int_x, int_y), clustered_data = cluster_data(data, intervention_column,
+                                                                        parameters['nb_cluster'])
         if preserve_order:
             obs_x, obs_y, int_x, int_y, i_max = split_data(clustered_data, 'labels', sort_data=False)
     else:
         raise Exception('Preprocessing method not known')
 
     return obs_x, obs_y, int_x, int_y
-
-
-def kl_term(p: float, q: float) -> float:
-    if q == 0:
-        return 10000000
-    elif p == 0:
-        return 0
-    else:
-        return p*log2(p/q)
 
 
 def find_best_model_x_to_y(base_x: int, base_y: int, data: Tuple[Any, Any, Any, Any], verbose: bool) -> Dict[str, Any]:
@@ -254,29 +248,6 @@ def find_best_model_x_to_y(base_x: int, base_y: int, data: Tuple[Any, Any, Any, 
     else:
         model_x_to_y = model_x_to_y_not_monotone
     return model_x_to_y
-
-
-def get_distr_x(p_hat: Dict[str, float]) -> List[float]:
-    distr = [p_hat['0000'] + p_hat['0001'] + p_hat['0010'] + p_hat['0011'] + p_hat['0100'] + p_hat['0101'] +
-             p_hat['0110'] + p_hat['0111'],
-             p_hat['1000'] + p_hat['1001'] + p_hat['1010'] + p_hat['1011'] + p_hat['1100'] + p_hat['1101'] +
-             p_hat['1110'] + p_hat['1111']]
-    return distr / sum(distr)
-
-
-def get_distr_y(p_hat: Dict[str, float]) -> List[float]:
-    distr = [p_hat['0000'] + p_hat['0001'] + p_hat['0010'] + p_hat['0011'] + p_hat['1000'] + p_hat['1001'] +
-             p_hat['1010'] + p_hat['1011'],
-             p_hat['0100'] + p_hat['0101'] + p_hat['0110'] + p_hat['0111'] + p_hat['1100'] + p_hat['1101'] +
-             p_hat['1110'] + p_hat['1111']]
-    return distr / sum(distr)
-
-
-def get_kl_between_x_y(model_results: Dict[str, Any]) -> float:
-    p_hat = model_results['p_hat']
-    p_x = get_distr_x(p_hat)
-    p_y = get_distr_y(p_hat)
-    return kl_divergence(p_x, p_y)
 
 
 def decide_best_model(model_x_to_y: Dict[str, Any], model_y_to_x: Dict[str, Any], monotone: bool, verbose: bool,
@@ -339,7 +310,7 @@ def get_auto_configuration(data: pd.DataFrame) -> Dict[str, Any]:
         parameters['preprocess_method'] = 'cluster_discrete'
         parameters['decision_criteria'] = 'global_error'
         parameters['bins'] = max(10, int((nb_alphabet_x + nb_alphabet_y) / 20))
-        parameters['nb_cluster'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 30))
+        parameters['nb_cluster'] = -1
     elif (nb_alphabet_x == 2 and nb_alphabet_y < 5) or (nb_alphabet_x < 5 and nb_alphabet_y == 2):
         parameters['preprocess_method'] = 'none'
         parameters['decision_criteria'] = 'global_error'
@@ -348,34 +319,55 @@ def get_auto_configuration(data: pd.DataFrame) -> Dict[str, Any]:
     elif difference < 0:
         parameters['preprocess_method'] = 'discrete_cluster'
         parameters['decision_criteria'] = 'kl_xy'
-        parameters['bins'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 2))
-        parameters['nb_cluster'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 2))
+        parameters['bins'] = max(2, int(nb_alphabet_x + nb_alphabet_y))
+        parameters['nb_cluster'] = -1
     elif difference >= 0:
         parameters['preprocess_method'] = 'discrete_cluster'
         parameters['decision_criteria'] = 'global_error'
-        parameters['bins'] = max(2, int((nb_alphabet_x + nb_alphabet_y)))
-        parameters['nb_cluster'] = max(2, int((nb_alphabet_x + nb_alphabet_y) / 2))
-
-    with np.errstate(invalid='ignore'):
-        stat_s, p_s = spearmanr(data['X'], data['Y'])
-        if abs(stat_s) >= 0.7 and p_s <= 0.01:
-            parameters['monotone'] = True
-        else:
-            parameters['monotone'] = False
+        parameters['bins'] = max(2, int(nb_alphabet_x + nb_alphabet_y))
+        parameters['nb_cluster'] = -1
 
     return parameters
 
 
-def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool, parameters: Dict[str, Any],
-                   verbose: bool, preserve_order: bool) -> Tuple[Tuple[str, str], Tuple[float, float]]:
+def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool,
+                   parameters: Union[None, Dict[str, Any]], verbose: bool = False, preserve_order: bool = False) \
+        -> Union[Tuple[Tuple[str, str], Tuple[float, float]], Tuple[str, float]]:
+    """
+    Pairwise causal discovery using information-theoretic approximation to causal models. The algorithm decides whether
+    X causes Y or Y causes X or return no decision if no direction is preferred. Sample data from X and Y are given as
+    columns in the data dataframe. The different data pairs are assumed to be i.i.d.
+
+    :param base_x: size of alphabet for embedded variable X
+    :param base_y: size of alphabet for embedded variable Y
+    :param data: pandas dataframe with columns 'X' and 'Y'
+    :param auto_configuration: If True, then the preprocessing method and its parametrization will be set automatically
+    by following a simple heuristic. Data in parameters will be ignored. If False, then data in parameters will be
+    used instead.
+    :param parameters: (optional) Dictionary that contains the preprocessing method together with its parameters and the
+    criteria used for deciding the causal direction. Not used when auto_configuration is True. The 'bins' define the
+    number of bins used during discretization in the preprocessing. The 'nb_cluster' entry specifies the number of
+    clusters used at the clustering step in the preprocessing. The entry 'preprocess_method' specifies the method used
+    for preprocessing of the data. Currently there are the following possibilities:
+        'none' : no preprocessing.
+        'cluster_discrete': cluster the data using KMeans and 'nb_cluster' and discretize data using KBinsDiscretizer
+        and 'bins'.
+        'discrete_cluster': discretize data using 'bins' followed by a KMeans clustering using 'nb_cluster'.
+    The entry 'decision_criteria' specifies which decision criteria is used in order to decide the causal direction.
+    You can either use 'global_error' or 'kl_xy' as a decision criterion. See paper and Supplementary Material for
+    more details.
+    :param verbose: Flag to turn on and off detailed output.
+    :param preserve_order: If True, then the order in the data will be preserved (for example if you feed in timeseries
+    data). Especially during data preprocessing no sorting or any other reordering will happen.
+    :return: Depending on decision_criteria entry in parameters return direction in form of a string "X->Y", "Y->X",
+    "no decision" with the value of its decision_criteria. If decision_criteria is not 'global_error' or 'kl_xy' it will
+    return results based on both criteria in form of a tuple of tuples.
+    """
     if auto_configuration:
         parameters = get_auto_configuration(data)
-    monotone = (parameters['monotone'] and base_x == 2 and base_y == 2)
 
     x_obs_x, x_obs_y, x_int_x, x_int_y = preprocessing(data=data, intervention_column='X',
                                                        preserve_order=preserve_order, parameters=parameters)
-    data_xy = pd.concat([pd.concat([x_obs_x, x_int_x]), pd.concat([x_obs_y, x_int_y])], axis=1)
-    data_xy.columns = ['X', 'Y']
     y_obs_x, y_obs_y, y_int_x, y_int_y = preprocessing(data=data, intervention_column='Y',
                                                        preserve_order=preserve_order, parameters=parameters)
     if base_x == base_y == 2:
@@ -383,13 +375,13 @@ def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configurat
                                               verbose=verbose)
         model_y_to_x = find_best_model_x_to_y(base_x=base_x, base_y=base_y, data=(y_obs_y, y_obs_x, y_int_y, y_int_x),
                                               verbose=verbose)
-        result = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_dist')
-        result_xy = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_xy')
+        result = decide_best_model(model_x_to_y, model_y_to_x, True, verbose, strategy='kl_dist')
+        result_xy = decide_best_model(model_x_to_y, model_y_to_x, True, verbose, strategy='kl_xy')
     else:
-        model_x_to_y = test_model_from_x_to_y(base_x, base_y, x_obs_x, x_obs_y, x_int_x, x_int_y, monotone, verbose)
-        model_y_to_x = test_model_from_x_to_y(base_x, base_y, y_obs_y, y_obs_x, y_int_y, y_int_x, monotone, verbose)
-        result = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, strategy='kl_dist')
-        result_xy = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, strategy='kl_dist')
+        model_x_to_y = test_model_from_x_to_y(base_x, base_y, x_obs_x, x_obs_y, x_int_x, x_int_y, False, verbose)
+        model_y_to_x = test_model_from_x_to_y(base_x, base_y, y_obs_y, y_obs_x, y_int_y, y_int_x, False, verbose)
+        result = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_dist')
+        result_xy = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_dist')
 
     if parameters['decision_criteria'] == 'global_error':
         return result['result'], result['min_error']
@@ -399,8 +391,36 @@ def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configurat
         return (result['result'], result_xy['result']), (result['min_error'], result_xy['min_error'])
 
 
-def iacm_timeseries(base_x: int, base_y: int, data: pd.DataFrame, parameters: Dict[str, Any], max_lag: int,
-                    verbose: bool):
+def iacm_discovery_timeseries(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool,
+                              parameters: Dict[str, Any], max_lag: int, verbose: bool = False):
+    """
+    Pairwise causal discovery using information-theoretic approximation to causal models. The algorithm decides whether
+    X causes Y or Y causes X or return no decision if no direction is preferred. Sample data from X and Y are given as
+    columns in the data dataframe. The different data pairs are assumed to be timeseries data. Therefore the
+    preprocessing will keep the order of the data as it is.
+    :param base_x: size of alphabet for embedded variable X
+    :param base_y: size of alphabet for embedded variable Y
+    :param data: pandas dataframe with columns 'X' and 'Y'
+    :param auto_configuration: If True, then the preprocessing method and its parametrization will be set automatically
+    by following a simple heuristic. Data in parameters will be ignored. If False, then data in parameters will be
+    used instead.
+    :param parameters: (optional) Dictionary that contains the preprocessing method together with its parameters and the
+    criteria used for deciding the causal direction. Not used when auto_configuration is True. The 'bins' define the
+    number of bins used during discretization in the preprocessing. The 'nb_cluster' entry specifies the number of
+    clusters used at the clustering step in the preprocessing. The entry 'preprocess_method' specifies the method used
+    for preprocessing of the data. Currently there are the following possibilities:
+        'none' : no preprocessing.
+        'cluster_discrete': cluster the data using KMeans and 'nb_cluster' and discretize data using KBinsDiscretizer
+        and 'bins'.
+        'discrete_cluster': discretize data using 'bins' followed by a KMeans clustering using 'nb_cluster'.
+    The entry 'decision_criteria' specifies which decision criteria is used in order to decide the causal direction.
+    You can either use 'global_error' or 'kl_xy' as a decision criterion. See paper and Supplementary Material for
+    more details.
+    :param max_lag:
+    :param verbose:
+    :return: Depending on decision_criteria entry in parameters return direction in form of a string "X->Y", "Y->X",
+    "no decision" with the value of its decision_criteria.
+    """
     timeseries_result = dict()
     t = data.shape[0]
     tmp_data = data.copy()
@@ -408,11 +428,11 @@ def iacm_timeseries(base_x: int, base_y: int, data: pd.DataFrame, parameters: Di
         tmp_data['X'] = data['X'][:t - lag].reset_index(drop=True)
         tmp_data['Y'] = data['Y'][lag:].reset_index(drop=True)
         tmp_data = tmp_data.dropna().reset_index(drop=True)
-        res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=tmp_data, parameters=parameters, verbose=verbose,
-                                   preserve_order=True)
+        res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=tmp_data, auto_configuration=auto_configuration,
+                                   parameters=parameters, verbose=verbose, preserve_order=True)
         timeseries_result[lag] = dict()
-        timeseries_result[lag]['result'] = res[1]
-        timeseries_result[lag]['crit'] = crit[1]
+        timeseries_result[lag]['result'] = res
+        timeseries_result[lag]['crit'] = crit
 
     min_crit = 1
     best_res = "no decision"
@@ -422,3 +442,47 @@ def iacm_timeseries(base_x: int, base_y: int, data: pd.DataFrame, parameters: Di
             best_res = res_dict['result']
 
     return best_res, min_crit
+
+
+def get_causal_probabilities(data: pd.DataFrame, auto_configuration: bool, parameters: Dict[str, Any],
+                             preserve_order: bool, direction_x_to_y: bool) -> Tuple[float, float, float, float]:
+    """
+    Functions that calculate probabilities of how necessary, sufficient, necessary and sufficient a cause is for an
+    effect (PN, PS, PNS). I approximates to a monotone causal model X->Y and calculates PN, PS, PNS.
+    :param data: pandas dataframe with columns 'X' and 'Y'
+    :param auto_configuration: If True, then the preprocessing method and its parametrization will be set automatically
+    by following a simple heuristic. Data in parameters will be ignored. If False, then data in parameters will be
+    used instead.
+    :param parameters: (optional) Dictionary that contains the preprocessing method together with its parameters and the
+    criteria used for deciding the causal direction. Not used when auto_configuration is True. The 'bins' define the
+    number of bins used during discretization in the preprocessing. The 'nb_cluster' entry specifies the number of
+    clusters used at the clustering step in the preprocessing. The entry 'preprocess_method' specifies the method used
+    for preprocessing of the data. Currently there are the following possibilities:
+        'none' : no preprocessing.
+        'cluster_discrete': cluster the data using KMeans and 'nb_cluster' and discretize data using KBinsDiscretizer
+        and 'bins'.
+        'discrete_cluster': discretize data using 'bins' followed by a KMeans clustering using 'nb_cluster'.
+    The entry 'decision_criteria' specifies which decision criteria is used in order to decide the causal direction.
+    You can either use 'global_error' or 'kl_xy' as a decision criterion. See paper and Supplementary Material for
+    more details.
+    :param preserve_order: Flag that specifies if the order in the input data should be preserved or not.
+    :param direction_x_to_y: If True an approximation to a monotone causal model X->Y will be done, otherwise to a
+    monotone causal model Y->X will be done.
+    :return: PN, PS, PNS and approximation error to the causal models.
+    """
+    if auto_configuration:
+        parameters = get_auto_configuration(data)
+
+    if direction_x_to_y:
+        obs_x, obs_y, int_x, int_y = preprocessing(data=data, intervention_column='X', preserve_order=preserve_order,
+                                                   parameters=parameters)
+        model_x_to_y_monotone = test_model_from_x_to_y(base_x=2, base_y=2, obs_x=obs_x, obs_y=obs_y,
+                                                       int_x=int_x, int_y=int_y, monotone=True, verbose=False)
+    else:
+        obs_x, obs_y, int_x, int_y = preprocessing(data=data, intervention_column='Y', preserve_order=preserve_order,
+                                                   parameters=parameters)
+        model_x_to_y_monotone = test_model_from_x_to_y(base_x=2, base_y=2, obs_x=obs_y, obs_y=obs_x,
+                                                       int_x=int_y, int_y=int_x, monotone=True, verbose=False)
+
+    return model_x_to_y_monotone['PN'], model_x_to_y_monotone['PS'], model_x_to_y_monotone['PNS'], \
+        model_x_to_y_monotone['GlobalError']

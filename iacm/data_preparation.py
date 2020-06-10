@@ -5,6 +5,8 @@ from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans
 from typing import List, Dict, Tuple, Any
 
+from iacm.metrics import kl_divergence_x_y
+
 
 def read_data(directory: str, filename: str) -> pd.DataFrame:
     data = pd.read_csv(directory + '/' + filename, sep=" ", header=None)
@@ -160,3 +162,41 @@ def split_data(data, col_to_prepare, sort_data=True):
 
 def split_data_at_index(data: pd.DataFrame, idx: int) -> Tuple[Any, Any, Any, Any]:
     return data['X'][0:idx], data['Y'][0:idx], data['X'][idx:], data['Y'][idx:]
+
+
+def find_best_cluster(data: pd.DataFrame, intervention_column: str, max_nb_clusters: int) \
+        -> Tuple[Tuple[Tuple[Any, Any, Any, Any], pd.DataFrame], int]:
+    if kl_divergence_x_y(data, -1) == np.inf:
+        nb_bins_for_distr = 10
+    else:
+        nb_bins_for_distr = -1
+    min_kl_div = np.inf
+    best_nb_clusters = 2
+    for nb_clusters in range(2, max_nb_clusters):
+        (obs_x, obs_y, int_x, int_y), clustered_data = cluster_data(data, intervention_column, nb_clusters)
+        if intervention_column == 'X':
+            obs_pdf = pd.concat([obs_x, obs_y], axis=1)
+            int_pdf = pd.concat([int_x, int_y], axis=1)
+        else:
+            obs_pdf = pd.concat([obs_y, obs_x], axis=1)
+            int_pdf = pd.concat([int_y, int_x], axis=1)
+        kl_div = kl_divergence_x_y(obs_pdf, nb_bins_for_distr) + kl_divergence_x_y(int_pdf, nb_bins_for_distr)
+        if kl_div < min_kl_div:
+            min_kl_div = kl_div
+            best_nb_clusters = nb_clusters
+
+    return cluster_data(data, intervention_column, best_nb_clusters), best_nb_clusters
+
+
+def find_best_discretization(data: pd.DataFrame) -> pd.DataFrame:
+    min_kl_div = np.inf
+    max_nb_bins = max(len(set(data['X'].tolist())), len(set(data['Y'].tolist())))
+    best_nb_bins = 2
+    for nb_bins in range(2, max_nb_bins * 10):
+        disc_data = discretize_data(data, nb_bins)
+        kl_div = kl_divergence_x_y(disc_data, -1)
+        if kl_div < min_kl_div:
+            min_kl_div = kl_div
+            best_nb_bins = nb_bins
+
+    return discretize_data(data, best_nb_bins)
