@@ -214,3 +214,11 @@ unique(r1$data[,c("X","Yp")])
 # The recovery of hidden representation
 data
 unique(data.frame(data$X,data$Yp))
+
+
+X <- rnorm(100)
+Y <- rnorm(50)
+Y0 <- rnorm(25)
+Y1 <- rnorm(25)
+cor(X,c(Y,Y0,Y1))
+cor(X[76:100],Y0)

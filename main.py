@@ -183,7 +183,7 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
         if file in timeseries_files:
             res, crit = iacm_discovery_timeseries(base_x=base_x, base_y=base_y, data=data, auto_configuration=True, parameters=params, max_lag=50, verbose=verbose)
         else:
-            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, auto_configuration=True, parameters=params, verbose=verbose, preserve_order=False)
+            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, auto_configuration=False, parameters=params, verbose=verbose, preserve_order=False)
 
         # plot_distributions()
         #statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
@@ -374,9 +374,9 @@ if __name__ == '__main__':
         params['nb_cluster'] = 2
         methods = ['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
         #run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
-        methods = ['IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
+        methods = ['IACM-none']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
         print("alphabet;bins;cluster;base;" + ";".join(methods))
-        for bins in range(11, 31):
+        for bins in range(14, 15):
             for clt in range(bins, (bins + 1)):
                 params['bins'] = bins
                 params['nb_cluster'] = -1

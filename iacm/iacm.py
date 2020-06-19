@@ -6,15 +6,15 @@ from typing import List, Dict, Tuple, Any, Union
 from iacm.data_preparation import get_probabilities, get_probabilities_intervention, write_contingency_table, \
     get_contingency_table, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels, \
     find_best_cluster, find_best_discretization
-from iacm.causal_models import setup_model_data, base_repr
+from iacm.causal_models import setup_model_data, base_repr, setup_causal_model_data, causal_models
 from iacm.metrics import get_kl_between_x_y, calc_error
 
 model_data = dict()
-model_data['2_2'] = setup_model_data(base=2, nb_variables=4)
-model_data['2_2_m_d'] = setup_model_data(base=2, nb_variables=4, monotone_decr=True, monotone_incr=False)
-model_data['2_2_m_i'] = setup_model_data(base=2, nb_variables=4, monotone_decr=False, monotone_incr=True)
-model_data['3_3'] = setup_model_data(base=3, nb_variables=5)
-model_data['4_4'] = setup_model_data(base=4, nb_variables=6)
+model_data['2_2'] = setup_model_data(base=2, causal_model=causal_models['X->Y'])
+model_data['2_2_m_d'] = setup_model_data(base=2, causal_model=causal_models['X->Y'], monotone_decr=True, monotone_incr=False)
+model_data['2_2_m_i'] = setup_model_data(base=2, causal_model=causal_models['X->Y'], monotone_decr=False, monotone_incr=True)
+model_data['3_3'] = setup_model_data(base=3, causal_model=causal_models['X->Y'])
+model_data['4_4'] = setup_model_data(base=4, causal_model=causal_models['X->Y'])
 
 
 def get_constraint_data(base_x: int, base_y: int, list_of_distributions) -> Dict[str, float]:

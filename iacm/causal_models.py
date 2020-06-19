@@ -1,16 +1,79 @@
-from typing import Dict
+from typing import Dict, Any, List
 import numpy as np
 from utils import insert, flatten, count_char
 
 
-def setup_model_data(base, nb_variables, monotone_incr=False, monotone_decr=False):
+causal_models = dict()
+causal_models['X|Y'] = {'V': 'X,Y,Y_x,X_y', 'nb_observed_variables': 2, 'interventional_variables': ['X', 'Y'], 'hidden_variables': []}
+causal_models['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': []}
+causal_models['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3, 'interventional_variables': ['Z'], 'hidden_variables': []}
+causal_models['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
+causal_models['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3, 'interventional_variables': ['Z', 'X'], 'hidden_variables': []}
+causal_models['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
+causal_models['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3, 'interventional_variables': ['X', 'Z'], 'hidden_variables': []}
+causal_models['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': ['Z']}
+
+
+def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False) -> Dict[str, Any]:
+    observation_variables = causal_model['V'].split(',')[0:causal_model['nb_observed_variables']]
+    observed_variables_after_intervention = causal_model['V'].split(',')[causal_model['nb_observed_variables']:]
+    nb_observed_variables = len(observation_variables)
+    nb_observed_variables_after_intervention = len(observed_variables_after_intervention)
+    nb_variables = nb_observed_variables + nb_observed_variables_after_intervention * base
+    size_prob = pow(base, nb_variables)
+    causal_model_data = dict()
+    causal_model_data['base_x'] = base
+    causal_model_data['nb_variables'] = nb_variables
+    causal_model_data['size_prob'] = size_prob
+
+    pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
+                                         observed_variables_after_intervention=observed_variables_after_intervention,
+                                         interventional_variables=causal_model['interventional_variables'],
+                                         hidden_variables=causal_model['hidden_variables'])
+    causal_model_data['constraint_patterns'] = pattern_data[base]['constraint_patterns']
+
+    lines = generate_constraint_lines(pattern_data[base]['constraint_patterns'], size_prob, base)
+    causal_model_data['B'] = np.array([[1] * size_prob] + lines)
+
+    zero_codes = get_zero_codes(pattern_data[base]['zero_code_patterns'], base)
+    if monotone_decr:
+        zero_codes.append('0001')
+        zero_codes.append('1101')
+    if monotone_incr:
+        zero_codes.append('0110')
+        zero_codes.append('1010')
+    causal_model_data['S_codes'] = s_codes(zero_codes, base, nb_variables)
+    d_list = list()
+    for i in range(0, size_prob):
+        if base_repr(i, base, nb_variables) in causal_model_data['S_codes']:
+            d_list.append(1)
+        else:
+            d_list.append(0)
+    causal_model_data['d'] = np.array(d_list)
+
+    causal_model_data['F'] = np.diag(np.array([1] * size_prob))
+    causal_model_data['c'] = np.array([0.0] * size_prob)
+
+    return causal_model_data
+
+
+def setup_model_data(base, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False):
     model_data = dict()
+    observation_variables = causal_model['V'].split(',')[0:causal_model['nb_observed_variables']]
+    observed_variables_after_intervention = causal_model['V'].split(',')[causal_model['nb_observed_variables']:]
+    nb_observed_variables = len(observation_variables)
+    nb_observed_variables_after_intervention = len(observed_variables_after_intervention)
+    nb_variables = nb_observed_variables + nb_observed_variables_after_intervention * base
     size_prob = pow(base, nb_variables)
     model_data['base_x'] = base
     model_data['nb_variables'] = nb_variables
     model_data['size_prob'] = size_prob
 
-    pattern_data = generate_pattern_data(base=base, nb_interventions=nb_variables-2)
+    pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
+                                         observed_variables_after_intervention=observed_variables_after_intervention,
+                                         interventional_variables=causal_model['interventional_variables'],
+                                         hidden_variables=causal_model['hidden_variables'])
+    #pattern_data = generate_pattern_data(base=base, nb_observations=2, nb_interventions=nb_variables-2, nb_intervention_variables=1)
     model_data['constraint_patterns'] = pattern_data[base]['constraint_patterns']
 
     lines = generate_constraint_lines(pattern_data[base]['constraint_patterns'], size_prob, base)
@@ -47,34 +110,72 @@ def setup_model_data(base, nb_variables, monotone_incr=False, monotone_decr=Fals
 #                                            '20xx1', '20xx2', '21xx0', '21xx2', '22xx0', '22xx1']}
 #                 }
 
-def generate_pattern_data(base: int, nb_interventions: int) -> Dict:
+def generate_pattern_data(base: int, observation_variables: List[str], observed_variables_after_intervention: List[str],
+                          interventional_variables: List[str], hidden_variables: List[str]) -> Dict:
     result_dict = dict()
     result_dict[base] = dict()
-    pattern_template = 'x'*2 + 'x'*nb_interventions
-    total_len = 2 + nb_interventions
+    nb_observations = len(observation_variables)
+    nb_observed_variables_after_intervention = pow(base, len(observed_variables_after_intervention))
+    pattern_template = 'x'*nb_observations + 'x'*nb_observed_variables_after_intervention
+    intervention_template = 'x' * nb_observed_variables_after_intervention
+    total_len = nb_observations + nb_observed_variables_after_intervention
 
     # generate constraint_patterns
     constraint_patterns = list()
     for intervention in range(1, base):
-        for position in range(0, nb_interventions):
+        for position in range(0, nb_observed_variables_after_intervention):
             constraint_patterns.append(insert(pattern_template, str(intervention), total_len - position))
 
-    # iterate through the ranges of X and Y
-    for value_x in range(base-1, -1, -1):
-        for value_y in range(base-1, -1, -1):
-            if (value_x == 0) and (value_y == 0):
-                continue
-            constraint_patterns.append(insert(pattern_template, str(value_x) + str(value_y), 2))
+    # iterate through the ranges of observed variables
+    for observed_value in range(pow(base, nb_observations)-1, -1, -1):
+        if observed_value == 0:
+            continue
+        constraint_patterns.append(insert(pattern_template, base_repr(observed_value, base, nb_observations), nb_observations))
 
     # generate zero_code_patterns
     zero_code_patterns = list()
 
-    for value_x in range(0, base):
-        for value_y in range(0, base,):
-            for intervention_y in range(0, base):
-                if value_y != intervention_y:
-                    zero_code_patterns.append(
-                        insert(insert(pattern_template, str(value_x) + str(value_y), 2), str(intervention_y), 3 + value_x))
+    observation_variables_mapping = {k: v for v, k in enumerate(observation_variables)}
+    observed_variables_after_intervention_mapping = {k: v for v, k in enumerate(observed_variables_after_intervention)}
+    hidden_variables_mapping = {k: v for v, k in enumerate(hidden_variables)}
+
+    all_interventional_variables = interventional_variables + hidden_variables
+
+    for observed_value in range(0, pow(base, nb_observations)):
+        for intervention_value in range(0, pow(base, nb_observed_variables_after_intervention)):
+            observation_data = base_repr(observed_value, base, nb_observations)
+            intervention_data = base_repr(intervention_value, base, nb_observed_variables_after_intervention)
+
+            for observation_var, observation_var_index in observation_variables_mapping.items():
+                for intervention_var in all_interventional_variables:
+
+                    if observation_var == intervention_var:
+                        continue
+                    observation_var_after_intervention = observation_var + '_' + intervention_var.lower()
+                    if observation_var_after_intervention in observed_variables_after_intervention_mapping.keys():
+                        adjusted_variable_index = observed_variables_after_intervention_mapping[observation_var_after_intervention]
+                    else:
+                        continue
+                    if intervention_var in observation_variables_mapping:
+                        intervention_index = observation_variables_mapping[intervention_var]
+                        observation_data_at_intervention_index = int(observation_data[intervention_index])
+                        if observation_data[observation_var_index] != intervention_data[
+                            adjusted_variable_index * base + observation_data_at_intervention_index]:
+                            intervention_pattern = insert(intervention_template, intervention_data[
+                                adjusted_variable_index * base + observation_data_at_intervention_index],
+                                                          adjusted_variable_index * base + observation_data_at_intervention_index + 1)
+                            zero_code_patterns.append(observation_data + intervention_pattern)
+                    else:
+                        for hidden_variable_values in range(0, pow(base, len(hidden_variables))):
+                            hidden_data = base_repr(hidden_variable_values, base, len(hidden_variables))
+                            for hidden_variable in hidden_variables:
+                                observation_data_at_intervention_index = int(hidden_data[hidden_variables_mapping[hidden_variable]])
+                                if observation_data[observation_var_index] != intervention_data[adjusted_variable_index*base + observation_data_at_intervention_index]:
+                                    intervention_pattern = insert(intervention_template, intervention_data[adjusted_variable_index*base + observation_data_at_intervention_index],
+                                                                  adjusted_variable_index*base + observation_data_at_intervention_index + 1)
+                                    zero_code_patterns.append(observation_data + intervention_pattern)
+
+    zero_code_patterns = list(set(zero_code_patterns))
 
     result_dict[base]['constraint_patterns'] = constraint_patterns
     result_dict[base]['zero_code_patterns'] = zero_code_patterns
