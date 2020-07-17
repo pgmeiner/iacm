@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-from iacm.iacm import iacm_discovery, iacm_discovery_timeseries
+from iacm.iacm import iacm_discovery_pairwise, iacm_discovery_timeseries, iacm_discovery
 from code_extern.cisc_master.cisc import cisc
 import warnings
 #from code_extern.cisc_master.dr import dr
@@ -10,6 +10,7 @@ from iacm.data_preparation import read_data, read_synthetic_data
 import cdt
 from iacm.data_generation import generate_discrete_data, generate_continuous_data
 from sklearn.preprocessing import RobustScaler
+from iacm.metrics import bidirectional_auc
 
 
 def print_statisticts(statistics):
@@ -70,6 +71,14 @@ def print_for_evaluation(statistics, alphabet_size_x, alphabet_size_y, params, b
           str(params['bins']) + ";" + str(params['nb_cluster']) + ";" +
           str(base) + ";" +
             ";".join([get_stat_entry(value) for method, value in statistics.items()]))
+
+
+def get_auc_entry(value):
+    return str(bidirectional_auc(value['truth'], value['scores']))
+
+
+def print_auc(statistics):
+    print(";;;;" + ";".join([get_auc_entry(value) for method, value in statistics.items()]))
 
 
 def run_simulations(structure, sample_sizes, alphabet_size_x, alphabet_size_y, nr_simulations):
@@ -183,12 +192,21 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
         if file in timeseries_files:
             res, crit = iacm_discovery_timeseries(base_x=base_x, base_y=base_y, data=data, auto_configuration=True, parameters=params, max_lag=50, verbose=verbose)
         else:
-            res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=data, auto_configuration=False, parameters=params, verbose=verbose, preserve_order=False)
+            res, crit = iacm_discovery(bases={'x': base_x, 'y': base_y}, data=data, auto_configuration=False, parameters=params, causal_models=['X->Y', 'X|Y'], preserve_order=False)
 
         # plot_distributions()
         #statistics[method]['avg_error'] = statistics[method]['avg_error'] + crit
 
     return res
+
+
+def get_score(result: str) -> int:
+    if "X->Y" in result:
+        return 1
+    elif "Y->X" in result:
+        return -1
+    else:
+        return 0
 
 
 timeseries_files = []#['histamin_blaehungen.csv', 'histamin_durchfall.csv', 'gluten_blaehungen.csv','sorbit_blaehungen.csv'] #['pair0042.txt', 'pair0068.txt', 'pair0069.txt', 'pair0077.txt', 'pair0094.txt', 'pair0095.txt']
@@ -207,7 +225,7 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
     for key, value in statistics.items():
         statistics[key] = {'correct': 0, 'not_correct': 0, 'no_decision': 0, 'not_correct_examples': [],
                            'correct_examples': [], 'avg_error': 0.0, 'total_nb': 1, 'correct0': 0, 'not_correct0': 0, 'no_decision0': 0,
-                           'correct1': 0, 'not_correct1': 0, 'no_decision1': 0}
+                           'correct1': 0, 'not_correct1': 0, 'no_decision1': 0, 'scores': [], 'truth': []}
 
     not_touched_files = []
     total = 0
@@ -229,6 +247,8 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
         directory = "./real_world_data/abalone/"
     elif 'CEChallenge2013' in data_set:
         directory = "./CEdata/CEfinal/"
+    elif 'CEChallenge2014' in data_set:
+        directory = "./CEdata/CEnew/"
     else:
         directory = f'./simulations/add_mult/{structure}/{alphabet_size_x}_{alphabet_size_y}'
     if os.path.isdir(directory):
@@ -272,8 +292,8 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
                         data = [pd.read_csv(directory + file, sep=";", header=None)]
                         targets = ["X->Y"]
                         weight = 1.0
-                    elif data_set == "CEChallenge2013":
-                        if 'pairs.csv' in file:
+                    elif data_set == "CEChallenge2013" or data_set == "CEChallenge2014":
+                        if 'test_pairs.csv' in file:
                             data_pdf = pd.read_csv(directory + file, sep=",", header=None)
                             targets_pdf = pd.read_csv(directory + file.replace("_pairs", "_target"), sep=",", header=None)
                             for index, row in data_pdf.iterrows():
@@ -299,14 +319,15 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
 
                     for truth, data_pdf in zip(targets, data):
                         if truth == "":
-                            continue
+                            truth = "X|Y"
                         data_pdf = pd.DataFrame(RobustScaler().fit(data_pdf).transform(data_pdf))
                         data_pdf.columns = ['X', 'Y']
                         for method in method_list:
+                            statistics[method]['truth'].append(get_score(truth))
                             res = get_result(method, file, data_pdf, statistics, preprocessing_stat, base_x, base_y, params, verbose)
-
+                            statistics[method]['scores'].append(get_score(res))
                             if 'IACM' in method:
-                                if truth == res:
+                                if truth in res:
                                     statistics[method]['correct0'] = statistics[method]['correct0'] + weight
                                     statistics[method]['correct_examples'].append(file)
                                 elif "no decision" in res:
@@ -348,6 +369,7 @@ def run_inference(method_list, data_set, structure, alphabet_size_x, alphabet_si
 
         # print out for evaluation
         print_for_evaluation(statistics, alphabet_size_x, alphabet_size_y, params, base_x)
+        print_auc(statistics)
         #print_for_preprocess_evaluation(preprocessing_stat)
 
 
@@ -374,10 +396,10 @@ if __name__ == '__main__':
         params['nb_cluster'] = 2
         methods = ['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']
         #run_inference(method_list=methods, data_set='Abalone', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
-        methods = ['IACM-none']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
+        methods = ['IACM-cluster_discrete']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster', 'IGCI', 'ANM', 'BivariateFit', 'CDS', 'RECI', 'CISC','ACID']#['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']#['IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-none', 'IACM-split_discrete', 'IACM-discrete_split', 'IACM-cluster_discrete', 'IACM-discrete_cluster'] #['IACM-cluster_discrete', 'IACM-discrete_cluster']
         print("alphabet;bins;cluster;base;" + ";".join(methods))
-        for bins in range(14, 15):
+        for bins in range(12, 13):
             for clt in range(bins, (bins + 1)):
                 params['bins'] = bins
-                params['nb_cluster'] = -1
-                run_inference(method_list=methods, data_set='CEP', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)
+                params['nb_cluster'] = clt
+                run_inference(method_list=methods, data_set='CEChallenge2014', structure=structure, alphabet_size_x=alphabet_size_x, alphabet_size_y=alphabet_size_y, base_x=base, base_y=base, params=params)

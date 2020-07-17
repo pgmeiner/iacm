@@ -3,15 +3,15 @@ import numpy as np
 from utils import insert, flatten, count_char
 
 
-causal_models = dict()
-causal_models['X|Y'] = {'V': 'X,Y,Y_x,X_y', 'nb_observed_variables': 2, 'interventional_variables': ['X', 'Y'], 'hidden_variables': []}
-causal_models['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': []}
-causal_models['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3, 'interventional_variables': ['Z'], 'hidden_variables': []}
-causal_models['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
-causal_models['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3, 'interventional_variables': ['Z', 'X'], 'hidden_variables': []}
-causal_models['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
-causal_models['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3, 'interventional_variables': ['X', 'Z'], 'hidden_variables': []}
-causal_models['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': ['Z']}
+causal_model_definition = dict()
+causal_model_definition['X|Y'] = {'V': 'X,Y,X_y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X', 'Y'], 'hidden_variables': []}
+causal_model_definition['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': []}
+causal_model_definition['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3, 'interventional_variables': ['Z'], 'hidden_variables': []}
+causal_model_definition['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
+causal_model_definition['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3, 'interventional_variables': ['Z', 'X'], 'hidden_variables': []}
+causal_model_definition['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
+causal_model_definition['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3, 'interventional_variables': ['X', 'Z'], 'hidden_variables': []}
+causal_model_definition['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': ['Z']}
 
 
 def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False) -> Dict[str, Any]:
@@ -23,8 +23,12 @@ def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_in
     size_prob = pow(base, nb_variables)
     causal_model_data = dict()
     causal_model_data['base_x'] = base
+    causal_model_data['base_y'] = base
     causal_model_data['nb_variables'] = nb_variables
     causal_model_data['size_prob'] = size_prob
+    causal_model_data['interventional_variables'] = causal_model['interventional_variables']
+    causal_model_data['hidden_variables'] = causal_model['hidden_variables']
+    causal_model_data['V'] = causal_model['V']
 
     pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
                                          observed_variables_after_intervention=observed_variables_after_intervention,
@@ -66,8 +70,10 @@ def setup_model_data(base, causal_model: Dict[str, Any], monotone_incr=False, mo
     nb_variables = nb_observed_variables + nb_observed_variables_after_intervention * base
     size_prob = pow(base, nb_variables)
     model_data['base_x'] = base
+    model_data['base_y'] = base
     model_data['nb_variables'] = nb_variables
     model_data['size_prob'] = size_prob
+    model_data['interventional_variables'] = causal_model['interventional_variables']
 
     pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
                                          observed_variables_after_intervention=observed_variables_after_intervention,

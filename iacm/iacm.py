@@ -2,25 +2,36 @@ import cvxpy as cp
 import numpy as np
 from math import log2
 import pandas as pd
+import itertools
 from typing import List, Dict, Tuple, Any, Union
 from iacm.data_preparation import get_probabilities, get_probabilities_intervention, write_contingency_table, \
     get_contingency_table, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels, \
-    find_best_cluster, find_best_discretization
-from iacm.causal_models import setup_model_data, base_repr, setup_causal_model_data, causal_models
-from iacm.metrics import get_kl_between_x_y, calc_error
+    find_best_cluster, find_best_discretization, get_contingency_table_general, get_probabilities_general, \
+    get_probabilities_intervention_general
+from iacm.causal_models import setup_model_data, base_repr, setup_causal_model_data, causal_model_definition
+from iacm.metrics import get_kl_between_x_y, calc_error, get_distr_xy, kl_divergence
+from sklearn.cluster import SpectralClustering
 
 model_data = dict()
-model_data['2_2'] = setup_model_data(base=2, causal_model=causal_models['X->Y'])
-model_data['2_2_m_d'] = setup_model_data(base=2, causal_model=causal_models['X->Y'], monotone_decr=True, monotone_incr=False)
-model_data['2_2_m_i'] = setup_model_data(base=2, causal_model=causal_models['X->Y'], monotone_decr=False, monotone_incr=True)
-model_data['3_3'] = setup_model_data(base=3, causal_model=causal_models['X->Y'])
-model_data['4_4'] = setup_model_data(base=4, causal_model=causal_models['X->Y'])
+model_data['2_2'] = setup_model_data(base=2, causal_model=causal_model_definition['X->Y'])
+model_data['2_2_m_d'] = setup_model_data(base=2, causal_model=causal_model_definition['X->Y'], monotone_decr=True, monotone_incr=False)
+model_data['2_2_m_i'] = setup_model_data(base=2, causal_model=causal_model_definition['X->Y'], monotone_decr=False, monotone_incr=True)
+model_data['3_3'] = setup_model_data(base=3, causal_model=causal_model_definition['X->Y'])
+model_data['4_4'] = setup_model_data(base=4, causal_model=causal_model_definition['X->Y'])
+model_data['2_2_X|Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X|Y'])
+model_data['2_2_X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X->Y'])
+model_data['2_2_2_X<-Z->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X<-Z->Y'])
+model_data['2_2_X<-[Z]->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X<-[Z]->Y'])
+model_data['2_2_Z->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['Z->X->Y'])
+model_data['2_2_[Z]->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['[Z]->X->Y'])
+model_data['2_2_(X,Z)->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['(X,Z)->Y'])
+model_data['2_2_(X,[Z])->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['(X,[Z])->Y'])
 
 
-def get_constraint_data(base_x: int, base_y: int, list_of_distributions) -> Dict[str, float]:
+def get_constraint_data(list_of_distributions, constraint_patterns: List[str]) -> Dict[str, float]:
     constraint_data = dict()
 
-    for value, pattern in zip(list_of_distributions, model_data[str(base_x) + '_' + str(base_y)]['constraint_patterns']):
+    for value, pattern in zip(list_of_distributions, constraint_patterns):
         constraint_data[pattern] = value
 
     return constraint_data
@@ -39,6 +50,35 @@ def get_constraint_distribution(p: Dict[str, float], p_i: Dict[str, float], base
                 continue
             index = str(value_x) + str(value_y)
             constraint_distr.append(p[index])
+
+    return constraint_distr
+
+
+def get_constraint_distribution_general(p: Dict[str, float], p_i: Dict[str, Dict[str, float]], bases: Dict[str, int], intervention_variables: List[str], hidden_variables: List[str]) -> List[float]:
+    constraint_distr = []
+    obs_vars = [o_v for o_v in bases.keys()]
+    for intervention_variable in intervention_variables:
+        intervention_variable = intervention_variable.lower()
+        for obs_var in reversed(obs_vars):
+            if obs_var == intervention_variable:
+                continue
+            for observation in range(1, bases[obs_var]):
+                for intervention in range(bases[intervention_variable] - 1, -1, -1):
+                    index = str(intervention) + '_' + str(observation)
+                    constraint_distr.append(p_i[obs_var][index])
+
+    for _ in hidden_variables:
+        for obs_var in reversed(obs_vars):
+            for observation in range(1, bases[obs_var]):
+                for intervention in range(1, -1, -1):
+                    index = str(intervention) + '_' + str(observation)
+                    constraint_distr.append(p_i[obs_var][index])
+
+    for index_combination in itertools.product(*tuple([''.join([str(v) for v in range(base - 1, -1, -1)]) for base in bases.values()])):
+        if all([v == 0 for v in index_combination]):
+            continue
+        p_index = ''.join(index_combination)
+        constraint_distr.append(p[p_index])
 
     return constraint_distr
 
@@ -72,7 +112,7 @@ def get_model_with_causal_probabilities(constraint_data: Dict[str, float]) -> Di
 def approximate_to_causal_model(base_x: int, base_y: int,
                                 observation_contingency_table: List[List[int]],
                                 intervention_contingency_table: List[List[int]],
-                                monotone: bool, verbose: bool) -> Dict[str, Any]:
+                                monotone: bool, causal_model: Dict[str, Any], verbose: bool) -> Dict[str, Any]:
     p = get_probabilities(observation_contingency_table, base_x, base_y)
     p_intervention = get_probabilities_intervention(intervention_contingency_table, base_x, base_y)
     constraint_distributions = get_constraint_distribution(p, p_intervention, base_x, base_y)
@@ -81,13 +121,29 @@ def approximate_to_causal_model(base_x: int, base_y: int,
             print(key + ":" + str(value))
         for key, value in p_intervention.items():
             print(key + ":" + str(value))
-    constraint_data = get_constraint_data(base_x=base_x, base_y=base_y, list_of_distributions=constraint_distributions)
+    constraint_data = get_constraint_data(list_of_distributions=constraint_distributions,
+                                          constraint_patterns=causal_model['constraint_patterns'])
 
     if monotone and base_x == 2 and base_y == 2:
         modeldata = get_model_with_causal_probabilities(constraint_data)
     else:
-        model_data_idx = str(base_x) + '_' + str(base_y)
-        modeldata = find_best_approximation_to_model(constraint_data, model_data[model_data_idx])
+        modeldata = find_best_approximation_to_model(constraint_data, causal_model)
+    return modeldata
+
+
+def approximate_to_causal_model_general(bases: Dict[str, int], observation_contingency_table: np.ndarray,
+                                        intervention_contingency_table: np.ndarray, monotone: bool,
+                                        causal_model: Dict[str, Any]) -> Dict[str, Any]:
+    p = get_probabilities_general(observation_contingency_table, bases)
+    p_intervention = get_probabilities_intervention_general(intervention_contingency_table, bases, causal_model['interventional_variables'], causal_model['hidden_variables'])
+    constraint_distributions = get_constraint_distribution_general(p, p_intervention, bases, causal_model['interventional_variables'], causal_model['hidden_variables'])
+    constraint_data = get_constraint_data(list_of_distributions=constraint_distributions,
+                                          constraint_patterns=causal_model['constraint_patterns'])
+
+    if monotone and all([base == 2 for base in bases.values()]):
+        modeldata = get_model_with_causal_probabilities(constraint_data)
+    else:
+        modeldata = find_best_approximation_to_model(constraint_data, causal_model)
     return modeldata
 
 
@@ -182,12 +238,15 @@ def find_best_approximation_to_model(constraint_data: Dict[str, float], meta_dat
     result['p_tilde'] = p_tilde
     result['p_hat'] = p_hat
     result["GlobalError"] = log2(1 / s)
+    result["kl_p_tilde_p_hat"] = kl_divergence(get_distr_xy(p_tilde, meta_data['base_x'], meta_data['base_y']),
+                                               get_distr_xy(p_hat, meta_data['base_x'], meta_data['base_y']))
 
     return result
 
 
 def test_model_from_x_to_y(base_x: int, base_y: int, obs_x: pd.Series, obs_y: pd.Series,
-                           int_x: pd.Series, int_y: pd.Series, monotone: bool, verbose: bool) -> Dict[str, Any]:
+                           int_x: pd.Series, int_y: pd.Series, monotone: bool, causal_model: Dict[str, Any],
+                           verbose: bool) -> Dict[str, Any]:
     intervention_contingency_table = get_contingency_table(int_x, int_y, base_x, base_y)
     observation_contigency_table = get_contingency_table(obs_x, obs_y, base_x, base_y)
 
@@ -196,53 +255,101 @@ def test_model_from_x_to_y(base_x: int, base_y: int, obs_x: pd.Series, obs_y: pd
         write_contingency_table(intervention_contingency_table, base_x, base_y)
 
     return approximate_to_causal_model(base_x, base_y, observation_contigency_table, intervention_contingency_table,
-                                       monotone, verbose)
+                                       monotone, causal_model, verbose)
 
 
-def preprocessing(data: pd.DataFrame, intervention_column: str, preserve_order: bool, parameters: Dict[str, Any])\
-        -> Tuple[Any, Any, Any, Any]:
+def test_model(bases: Dict[str, int], observation_data: pd.DataFrame, intervention_data: pd.DataFrame, monotone: bool,
+               causal_model: Dict[str, Any]) -> Dict[str, Any]:
+    observation_contingency_table = get_contingency_table_general(observation_data, bases)
+    if len(causal_model['hidden_variables']) > 0:
+        #cluster = SpectralClustering(n_clusters=2).fit(intervention_data)
+        zero_len = int(intervention_data.shape[0] / 2)
+        one_len = intervention_data.shape[0] - zero_len
+        intervention_data['z'] = ([0]*zero_len + [1]*one_len)#cluster.labels_
+        new_bases = bases.copy()
+        new_bases['z'] = 2
+        intervention_contingency_table = get_contingency_table_general(intervention_data, new_bases)
+    else:
+        intervention_contingency_table = get_contingency_table_general(intervention_data, bases)
+
+    return approximate_to_causal_model_general(bases, observation_contingency_table, intervention_contingency_table,
+                                               monotone, causal_model)
+
+
+def preprocessing_general(data: pd.DataFrame, V: str, intervention_column: str, preserve_order: bool, parameters: Dict[str, Any])\
+        -> Tuple[pd.DataFrame, pd.DataFrame]:
+    observation_variables = [v for v in V.split(',') if '_' not in v]
     if parameters['preprocess_method'] == 'none':
         split_idx = int(data.shape[0] / 2)
-        obs_x, obs_y, int_x, int_y = split_data_at_index(data, split_idx)
+        obs_pdf, int_pdf = split_data_at_index(data, split_idx, observation_variables)
     elif parameters['preprocess_method'] == 'cluster_discrete':
         if parameters['nb_cluster'] == -1:
-            (_, clustered_data), best_nb_clusters = find_best_cluster(data, intervention_column, parameters['bins'])
+            (_, clustered_data), best_nb_clusters = find_best_cluster(data, intervention_column, observation_variables, parameters['bins'])
         else:
-            _, clustered_data = cluster_data(data, intervention_column, parameters['nb_cluster'])
+            _, clustered_data = cluster_data(data, intervention_column, observation_variables, parameters['nb_cluster'])
             best_nb_clusters = parameters['nb_cluster']
         if parameters['bins'] == -1:
-            disc_data = find_best_discretization(data)
+            disc_data = find_best_discretization(data, observation_variables)
         else:
-            disc_data = discretize_data(data, parameters['bins'])
+            disc_data = discretize_data(data, parameters['bins'], observation_variables)
         disc_data['labels'] = clustered_data['labels']
         if preserve_order:
-            obs_x, obs_y, int_x, int_y, i_max = split_data(disc_data, 'labels', sort_data=False)
+            obs_pdf, int_pdf, i_max = split_data(disc_data, 'labels', observation_variables, sort_data=False)
         else:
-            obs_x, obs_y, int_x, int_y = split_at_clustered_labels(disc_data, intervention_column, best_nb_clusters)
-    elif parameters['preprocess_method'] == 'discrete_cluster':
-        if parameters['bins'] == -1:
-            disc_data = find_best_discretization(data)
-        else:
-            disc_data = discretize_data(data, parameters['bins'])
-        if parameters['nb_cluster'] == -1:
-            ((obs_x, obs_y, int_x, int_y), clustered_data), _ = find_best_cluster(disc_data, intervention_column,
-                                                                                  parameters['bins'])
-        else:
-            (obs_x, obs_y, int_x, int_y), clustered_data = cluster_data(data, intervention_column,
-                                                                        parameters['nb_cluster'])
-        if preserve_order:
-            obs_x, obs_y, int_x, int_y, i_max = split_data(clustered_data, 'labels', sort_data=False)
+            obs_pdf, int_pdf = split_at_clustered_labels(disc_data, intervention_column, observation_variables, best_nb_clusters)
     else:
         raise Exception('Preprocessing method not known')
 
-    return obs_x, obs_y, int_x, int_y
+    return obs_pdf, int_pdf
+
+
+def preprocessing(data: pd.DataFrame, V: str, intervention_column: str, preserve_order: bool, parameters: Dict[str, Any])\
+        -> Tuple[pd.DataFrame, pd.DataFrame]:
+    observation_variables = [v for v in V.split(',') if '_' not in v]
+    if parameters['preprocess_method'] == 'none':
+        split_idx = int(data.shape[0] / 2)
+        obs_pdf, int_pdf = split_data_at_index(data, split_idx, observation_variables)
+    elif parameters['preprocess_method'] == 'cluster_discrete':
+        if parameters['nb_cluster'] == -1:
+            (_, clustered_data), best_nb_clusters = find_best_cluster(data, intervention_column, observation_variables, parameters['bins'])
+        else:
+            _, clustered_data = cluster_data(data, intervention_column, observation_variables, parameters['nb_cluster'])
+            best_nb_clusters = parameters['nb_cluster']
+        if parameters['bins'] == -1:
+            disc_data = find_best_discretization(data, observation_variables)
+        else:
+            disc_data = discretize_data(data, parameters['bins'], observation_variables)
+        disc_data['labels'] = clustered_data['labels']
+        if preserve_order:
+            obs_pdf, int_pdf, i_max = split_data(disc_data, 'labels', observation_variables, sort_data=False)
+        else:
+            obs_pdf, int_pdf = split_at_clustered_labels(disc_data, intervention_column, observation_variables, best_nb_clusters)
+    elif parameters['preprocess_method'] == 'discrete_cluster':
+        if parameters['bins'] == -1:
+            disc_data = find_best_discretization(data, observation_variables)
+        else:
+            disc_data = discretize_data(data, parameters['bins'], observation_variables)
+        if parameters['nb_cluster'] == -1:
+            ((obs_pdf, int_pdf), clustered_data), _ = find_best_cluster(disc_data, intervention_column,
+                                                                        observation_variables, parameters['bins'])
+        else:
+            (obs_pdf, int_pdf), clustered_data = cluster_data(data, intervention_column, observation_variables,
+                                                              parameters['nb_cluster'])
+        if preserve_order:
+            obs_pdf, int_pdf, i_max = split_data(clustered_data, 'labels', observation_variables, sort_data=False)
+    else:
+        raise Exception('Preprocessing method not known')
+
+    return obs_pdf, int_pdf
 
 
 def find_best_model_x_to_y(base_x: int, base_y: int, data: Tuple[Any, Any, Any, Any], verbose: bool) -> Dict[str, Any]:
     model_x_to_y_monotone = test_model_from_x_to_y(base_x=base_x, base_y=base_y, obs_x=data[0], obs_y=data[1],
-                                                   int_x=data[2], int_y=data[3], monotone=True, verbose=verbose)
+                                                   int_x=data[2], int_y=data[3], monotone=True,
+                                                   causal_model=model_data['2_2'], verbose=verbose)
     model_x_to_y_not_monotone = test_model_from_x_to_y(base_x=base_x, base_y=base_y, obs_x=data[0], obs_y=data[1],
-                                                       int_x=data[2], int_y=data[3], monotone=False, verbose=verbose)
+                                                       int_x=data[2], int_y=data[3], monotone=False,
+                                                       causal_model=model_data['2_2'], verbose=verbose)
     if calc_error(model_x_to_y_monotone) <= calc_error(model_x_to_y_not_monotone):
         model_x_to_y = model_x_to_y_monotone
     else:
@@ -330,8 +437,86 @@ def get_auto_configuration(data: pd.DataFrame) -> Dict[str, Any]:
     return parameters
 
 
-def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool,
-                   parameters: Union[None, Dict[str, Any]], verbose: bool = False, preserve_order: bool = False) \
+def iacm_discovery(bases: Dict[str, int], data: pd.DataFrame, auto_configuration: bool,
+                   parameters: Union[None, Dict[str, Any]], causal_models: List[str], preserve_order: bool = False) \
+        -> Tuple[str, float]:
+
+    if auto_configuration:
+        parameters = get_auto_configuration(data)
+
+    base_index = '_'.join([str(v) for v in bases.values()])
+    models = dict()
+    for causal_model in causal_models:
+        causal_model_index = base_index + "_" + causal_model
+        if causal_model == 'X->Y' or causal_model == 'Y->X':
+            x_obs_pdf, x_int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                                 intervention_column='X', preserve_order=preserve_order,
+                                                 parameters=parameters)
+            y_obs_pdf, y_int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                                 intervention_column='Y', preserve_order=preserve_order,
+                                                 parameters=parameters)
+            models[causal_model] = test_model(bases, x_obs_pdf, x_int_pdf, False, model_data[causal_model_index])
+            y_obs_pdf = pd.DataFrame({'x': y_obs_pdf['y'], 'y': y_obs_pdf['x']})
+            y_int_pdf = pd.DataFrame({'x': y_int_pdf['y'], 'y': y_int_pdf['x']})
+            models['Y->X'] = test_model(bases, y_obs_pdf, y_int_pdf, False, model_data[causal_model_index])
+            if all([base == 2 for base in bases.values()]):
+                models[causal_model + '_monotone'] = test_model(bases, x_obs_pdf, x_int_pdf, True, model_data[causal_model_index])
+                models['Y->X_monotone'] = test_model(bases, y_obs_pdf, y_int_pdf, True, model_data[causal_model_index])
+        elif causal_model == 'X|Y':
+            x_obs_pdf, x_int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                                 intervention_column='X', preserve_order=preserve_order,
+                                                 parameters=parameters)
+            y_obs_pdf, y_int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                                 intervention_column='Y', preserve_order=preserve_order,
+                                                 parameters=parameters)
+            obs_pdf = pd.DataFrame()
+            obs_pdf['x'] = pd.concat([x_obs_pdf['x'], y_obs_pdf['x']], axis=0)
+            obs_pdf['y'] = pd.concat([x_obs_pdf['y'], y_obs_pdf['y']], axis=0)
+            int_pdf = pd.DataFrame()
+            int_pdf['x'] = pd.concat([x_int_pdf['x'], y_int_pdf['x']], axis=0)
+            int_pdf['y'] = pd.concat([x_int_pdf['y'], y_int_pdf['y']], axis=0)
+            models[causal_model] = test_model(bases, obs_pdf, int_pdf, False, model_data[causal_model_index])
+        elif causal_model == 'X<-Z->Y':
+            new_bases = bases
+            new_bases['z'] = 2
+            causal_model_index = '_'.join([str(v) for v in bases.values()]) + "_" + causal_model
+            obs_pdf, int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                             intervention_column='Z', preserve_order=preserve_order,
+                                             parameters=parameters)
+            models[causal_model] = test_model(new_bases, obs_pdf, int_pdf, False, model_data[causal_model_index])
+        elif causal_model == 'X<-[Z]->Y':
+            obs_pdf, int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                             intervention_column='', preserve_order=preserve_order,
+                                             parameters=parameters)
+            models[causal_model] = test_model(bases, obs_pdf, int_pdf, False, model_data[causal_model_index])
+        elif causal_model == 'Z->X->Y':
+            obs_pdf, int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                             intervention_column='Z', preserve_order=preserve_order,
+                                             parameters=parameters)
+            models[causal_model] = test_model(bases, obs_pdf, int_pdf, False, model_data[causal_model_index])
+        elif causal_model == '[Z]->X->Y':
+            obs_pdf, int_pdf = preprocessing(data=data, V=causal_model_definition[causal_model]['V'],
+                                             intervention_column='', preserve_order=preserve_order,
+                                             parameters=parameters)
+            models[causal_model] = test_model(bases, obs_pdf, int_pdf, False, model_data[causal_model_index])
+        elif causal_model == '(X,Z)->Y':
+            pass
+        elif causal_model == '(X,[Z])->Y':
+            pass
+
+    min_kl = np.inf
+    best_model = ""
+    for model_key, model in models.items():
+        if 'kl_p_tilde_p_hat' in model:
+            if min_kl > model['kl_p_tilde_p_hat']:
+                min_kl = model['kl_p_tilde_p_hat']
+                best_model = model_key
+
+    return best_model, min_kl
+
+
+def iacm_discovery_pairwise(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool,
+                            parameters: Union[None, Dict[str, Any]], verbose: bool = False, preserve_order: bool = False) \
         -> Union[Tuple[Tuple[str, str], Tuple[float, float]], Tuple[str, float]]:
     """
     Pairwise causal discovery using information-theoretic approximation to causal models. The algorithm decides whether
@@ -366,22 +551,24 @@ def iacm_discovery(base_x: int, base_y: int, data: pd.DataFrame, auto_configurat
     if auto_configuration:
         parameters = get_auto_configuration(data)
 
-    x_obs_x, x_obs_y, x_int_x, x_int_y = preprocessing(data=data, intervention_column='X',
-                                                       preserve_order=preserve_order, parameters=parameters)
-    y_obs_x, y_obs_y, y_int_x, y_int_y = preprocessing(data=data, intervention_column='Y',
-                                                       preserve_order=preserve_order, parameters=parameters)
+    x_obs_pdf, x_int_pdf = preprocessing(data=data, V=causal_model_definition['X->Y']['V'], intervention_column='X',
+                                         preserve_order=preserve_order, parameters=parameters)
+    y_obs_pdf, y_int_pdf = preprocessing(data=data, V=causal_model_definition['X->Y']['V'], intervention_column='Y',
+                                         preserve_order=preserve_order, parameters=parameters)
     if base_x == base_y == 2:
-        model_x_to_y = find_best_model_x_to_y(base_x=base_x, base_y=base_y, data=(x_obs_x, x_obs_y, x_int_x, x_int_y),
+        model_x_to_y = find_best_model_x_to_y(base_x=base_x, base_y=base_y, data=(x_obs_pdf['x'], x_obs_pdf['y'], x_int_pdf['x'], x_int_pdf['y']),
                                               verbose=verbose)
-        model_y_to_x = find_best_model_x_to_y(base_x=base_x, base_y=base_y, data=(y_obs_y, y_obs_x, y_int_y, y_int_x),
+        model_y_to_x = find_best_model_x_to_y(base_x=base_x, base_y=base_y, data=(y_obs_pdf['y'], y_obs_pdf['x'], y_int_pdf['y'], y_int_pdf['x']),
                                               verbose=verbose)
         result = decide_best_model(model_x_to_y, model_y_to_x, True, verbose, strategy='kl_dist')
         result_xy = decide_best_model(model_x_to_y, model_y_to_x, True, verbose, strategy='kl_xy')
     else:
-        model_x_to_y = test_model_from_x_to_y(base_x, base_y, x_obs_x, x_obs_y, x_int_x, x_int_y, False, verbose)
-        model_y_to_x = test_model_from_x_to_y(base_x, base_y, y_obs_y, y_obs_x, y_int_y, y_int_x, False, verbose)
+        model_x_to_y = test_model_from_x_to_y(base_x, base_y, x_obs_pdf['x'], x_obs_pdf['y'], x_int_pdf['x'], x_int_pdf['y'], False,
+                                              model_data['2_2_X->Y'], verbose)
+        model_y_to_x = test_model_from_x_to_y(base_x, base_y, y_obs_pdf['y'], y_obs_pdf['x'], y_int_pdf['y'], y_int_pdf['x'], False,
+                                              model_data['2_2_X->Y'], verbose)
         result = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_dist')
-        result_xy = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_dist')
+        result_xy = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_xy')
 
     if parameters['decision_criteria'] == 'global_error':
         return result['result'], result['min_error']
@@ -428,8 +615,8 @@ def iacm_discovery_timeseries(base_x: int, base_y: int, data: pd.DataFrame, auto
         tmp_data['X'] = data['X'][:t - lag].reset_index(drop=True)
         tmp_data['Y'] = data['Y'][lag:].reset_index(drop=True)
         tmp_data = tmp_data.dropna().reset_index(drop=True)
-        res, crit = iacm_discovery(base_x=base_x, base_y=base_y, data=tmp_data, auto_configuration=auto_configuration,
-                                   parameters=parameters, verbose=verbose, preserve_order=True)
+        res, crit = iacm_discovery_pairwise(base_x=base_x, base_y=base_y, data=tmp_data, auto_configuration=auto_configuration,
+                                            parameters=parameters, verbose=verbose, preserve_order=True)
         timeseries_result[lag] = dict()
         timeseries_result[lag]['result'] = res
         timeseries_result[lag]['crit'] = crit
@@ -474,15 +661,17 @@ def get_causal_probabilities(data: pd.DataFrame, auto_configuration: bool, param
         parameters = get_auto_configuration(data)
 
     if direction_x_to_y:
-        obs_x, obs_y, int_x, int_y = preprocessing(data=data, intervention_column='X', preserve_order=preserve_order,
-                                                   parameters=parameters)
-        model_x_to_y_monotone = test_model_from_x_to_y(base_x=2, base_y=2, obs_x=obs_x, obs_y=obs_y,
-                                                       int_x=int_x, int_y=int_y, monotone=True, verbose=False)
+        obs_pdf, int_pdf = preprocessing(data=data, V=causal_model_definition['X->Y']['V'], intervention_column='X',
+                                         preserve_order=preserve_order, parameters=parameters)
+        model_x_to_y_monotone = test_model_from_x_to_y(base_x=2, base_y=2, obs_x=obs_pdf['x'], obs_y=obs_pdf['y'],
+                                                       int_x=int_pdf['x'], int_y=int_pdf['y'], monotone=True,
+                                                       causal_model=model_data['2_2'], verbose=False)
     else:
-        obs_x, obs_y, int_x, int_y = preprocessing(data=data, intervention_column='Y', preserve_order=preserve_order,
-                                                   parameters=parameters)
-        model_x_to_y_monotone = test_model_from_x_to_y(base_x=2, base_y=2, obs_x=obs_y, obs_y=obs_x,
-                                                       int_x=int_y, int_y=int_x, monotone=True, verbose=False)
+        obs_pdf, int_pdf = preprocessing(data=data, V=causal_model_definition['X->Y']['V'], intervention_column='Y',
+                                         preserve_order=preserve_order, parameters=parameters)
+        model_x_to_y_monotone = test_model_from_x_to_y(base_x=2, base_y=2, obs_x=obs_pdf['y'], obs_y=obs_pdf['x'],
+                                                       int_x=int_pdf['y'], int_y=int_pdf['x'], monotone=True,
+                                                       causal_model=model_data['2_2'], verbose=False)
 
     return model_x_to_y_monotone['PN'], model_x_to_y_monotone['PS'], model_x_to_y_monotone['PNS'], \
         model_x_to_y_monotone['GlobalError']

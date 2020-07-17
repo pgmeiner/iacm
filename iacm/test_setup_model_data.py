@@ -1,5 +1,5 @@
 import numpy as np
-from iacm.causal_models import setup_model_data, setup_causal_model_data, causal_models
+from iacm.causal_models import setup_model_data, setup_causal_model_data, causal_model_definition
 
 expected_model_data = dict()
 expected_model_data['2_2'] = {
@@ -99,18 +99,18 @@ expected_model_data['(X,[Z])->Y'] = {
 
 def test_setup_model_data():
     model_data = dict()
-    model_data['X|Y'] = setup_causal_model_data(base=2, causal_model=causal_models['X|Y'])
-    model_data['2_2_X<-Z->Y'] = setup_causal_model_data(base=2, causal_model=causal_models['X<-Z->Y'])
-    model_data['2_2_X<-[Z]->Y'] = setup_causal_model_data(base=2, causal_model=causal_models['X<-[Z]->Y'])
-    model_data['Z->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_models['Z->X->Y'])
-    model_data['[Z]->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_models['[Z]->X->Y'])
-    model_data['(X,Z)->Y'] = setup_causal_model_data(base=2, causal_model=causal_models['(X,Z)->Y'])
-    model_data['(X,[Z])->Y'] = setup_causal_model_data(base=2, causal_model=causal_models['(X,[Z])->Y'])
-    model_data['2_2'] = setup_causal_model_data(base=2, causal_model=causal_models['X->Y'])
-    model_data['2_2_m_d'] = setup_causal_model_data(base=2, causal_model=causal_models['X->Y'], monotone_decr=True, monotone_incr=False)
-    model_data['2_2_m_i'] = setup_causal_model_data(base=2, causal_model=causal_models['X->Y'], monotone_decr=False, monotone_incr=True)
-    model_data['3_3'] = setup_causal_model_data(base=3, causal_model=causal_models['X->Y'])
-    model_data['4_4'] = setup_causal_model_data(base=4, causal_model=causal_models['X->Y'])
+    model_data['X|Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X|Y'])
+    model_data['2_2_X<-Z->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X<-Z->Y'])
+    model_data['2_2_X<-[Z]->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X<-[Z]->Y'])
+    model_data['Z->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['Z->X->Y'])
+    model_data['[Z]->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['[Z]->X->Y'])
+    model_data['(X,Z)->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['(X,Z)->Y'])
+    model_data['(X,[Z])->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['(X,[Z])->Y'])
+    model_data['2_2'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X->Y'])
+    model_data['2_2_m_d'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X->Y'], monotone_decr=True, monotone_incr=False)
+    model_data['2_2_m_i'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X->Y'], monotone_decr=False, monotone_incr=True)
+    model_data['3_3'] = setup_causal_model_data(base=3, causal_model=causal_model_definition['X->Y'])
+    model_data['4_4'] = setup_causal_model_data(base=4, causal_model=causal_model_definition['X->Y'])
 
     for signature in ['2_2', '2_2_m_d', '2_2_m_i']:
         m_b_s = model_data[signature]['B'].sort()

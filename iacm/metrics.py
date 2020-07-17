@@ -53,7 +53,7 @@ def get_embedded_empirical_distributions(x: List, y: List, nr_bins=-1) -> Tuple[
 
 
 def kl_divergence_x_y(data: pd.DataFrame, nr_bins: int) -> float:
-    p_x, p_y = get_embedded_empirical_distributions(data['X'], data['Y'], nr_bins)
+    p_x, p_y = get_embedded_empirical_distributions(data[data.columns[0]], data[data.columns[1]], nr_bins)
     return kl_divergence(p_x, p_y)
 
 
@@ -80,6 +80,20 @@ def get_distr_x(p_hat: Dict[str, float]) -> List[float]:
     return distr / sum(distr)
 
 
+def get_distr_xy(p: Dict[str, float], base_x: int, base_y: int) -> List[float]:
+    distr = []
+    for x in range(0, base_x):
+        for y in range(0, base_y):
+            xy_sum = 0
+            for k, v in p.items():
+                xy = str(x) + str(y)
+                if xy == k[:2]:
+                   xy_sum = xy_sum + v
+            distr.append(xy_sum)
+
+    return [dist / sum(distr) for dist in distr]
+
+
 def local_error(p_nom: float, p_denom: float, s: float) -> float:
     if p_denom > 0 and p_nom > 0:
         return 1 / s * p_nom * log2(p_nom / p_denom)
@@ -94,3 +108,76 @@ def calc_error(model_results: Dict[str, Any]) -> float:
         return model_results["GlobalError"]
     else:
         return np.inf
+
+
+def tied_rank(x):
+    """
+    Computes the tied rank of elements in x.
+    This function computes the tied rank of elements in x.
+    Parameters
+    ----------
+    x : list of numbers, numpy array
+    Returns
+    -------
+    score : list of numbers
+            The tied rank f each element in x
+    """
+    sorted_x = sorted(zip(x,range(len(x))))
+    r = [0 for k in x]
+    cur_val = sorted_x[0][0]
+    last_rank = 0
+    for i in range(len(sorted_x)):
+        if cur_val != sorted_x[i][0]:
+            cur_val = sorted_x[i][0]
+            for j in range(last_rank, i):
+                r[sorted_x[j][1]] = float(last_rank+1+i)/2.0
+            last_rank = i
+        if i==len(sorted_x)-1:
+            for j in range(last_rank, i+1):
+                r[sorted_x[j][1]] = float(last_rank+i+2)/2.0
+    return r
+
+
+def auc(actual, posterior):
+    """
+    Computes the area under the receiver-operater characteristic (AUC)
+    This function computes the AUC error metric for binary classification.
+    Parameters
+    ----------
+    actual : list of binary numbers, numpy array
+             The ground truth value
+    posterior : same type as actual
+                Defines a ranking on the binary numbers, from most likely to
+                be positive to least likely to be positive.
+    Returns
+    -------
+    score : double
+            The mean squared error between actual and posterior
+    """
+    r = tied_rank(posterior)
+    num_positive = len([0 for x in actual if x==1])
+    num_negative = len(actual)-num_positive
+    sum_positive = sum([r[i] for i in range(len(r)) if actual[i]==1])
+    auc = ((sum_positive - num_positive*(num_positive+1)/2.0) /
+           (num_negative*num_positive))
+    return auc
+
+
+def forward_auc(labels, predictions):
+    target_one = [1 if x == 1 else 0 for x in labels]
+    score = auc(target_one, predictions)
+    return score
+
+
+def reverse_auc(labels, predictions):
+    target_neg_one = [1 if x == -1 else 0 for x in labels]
+    neg_predictions = [-x for x in predictions]
+    score = auc(target_neg_one, neg_predictions)
+    return score
+
+
+def bidirectional_auc(labels, predictions):
+    score_forward = forward_auc(labels, predictions)
+    score_reverse = reverse_auc(labels, predictions)
+    score = (score_forward + score_reverse) / 2.0
+    return score

@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import warnings
+import itertools
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans
 from typing import List, Dict, Tuple, Any
@@ -54,6 +55,30 @@ def get_contingency_table(x: pd.Series, y: pd.Series, base_x: int, base_y: int) 
     return ctable
 
 
+def get_contingency_table_general(data: pd.DataFrame, bases: Dict[str, int]) -> np.ndarray:
+    # ctable[x,y,z,...]
+    ctable = np.ones(tuple([v for v in bases.values()]))
+    if any([data[k].empty for k in data.keys()]):
+        return ctable
+    thresholds = dict()
+    for var_name in data.keys():
+        thresholds[var_name] = np.quantile(data[var_name], [i / bases[var_name] for i in range(1, bases[var_name] + 1)])
+        if thresholds[var_name][0] == thresholds[var_name][len(thresholds[var_name])-1]:
+            thresholds[var_name][0] = 0
+
+    for index, row in data.iterrows():
+        table_index = list()
+        for var_name in data.keys():
+            for i, thres in enumerate(thresholds[var_name]):
+                if row[var_name] <= thres:
+                    table_index.append(i)
+                    break
+        table_index = tuple(table_index)
+        ctable[table_index] = ctable[table_index] + 1
+
+    return ctable
+
+
 def write_contingency_table(contingency_table: List[List[int]], base_x: int, base_y: int):
     if base_x == 2 and base_y == 2:
         write_contingency_table_binary(contingency_table)
@@ -90,6 +115,72 @@ def get_probabilities(contingency_table: List[List[int]], base_x: int, base_y: i
     return p
 
 
+def get_probabilities_general(contingency_table: np.ndarray, bases: Dict[str, int]) -> Dict[str, float]:
+    table_sum = contingency_table.sum()
+
+    p = dict()
+    for index_combination in itertools.product(*tuple([''.join([str(v) for v in range(0, base)]) for base in bases.values()])):
+        index = tuple([int(v) for v in index_combination])
+        p_index = ''.join(index_combination)
+        p[p_index] = contingency_table[index] / table_sum
+
+    return p
+
+
+def get_probabilities_intervention_general(contingency_table: np.ndarray, bases: Dict[str, int], intervention_variables: List[str],
+                                           hidden_variables: List[str]) -> Dict[str, Dict[str, float]]:
+    p_intervention = dict()
+
+    latent_intervention_variables = intervention_variables
+    if len(latent_intervention_variables) == 0 and len(hidden_variables) > 0:
+        latent_intervention_variables = hidden_variables
+        new_bases = bases.copy()
+        new_bases['z'] = 2
+    else:
+        new_bases = bases.copy()
+
+    for intervention_variable in latent_intervention_variables:
+        intervention_variable = intervention_variable.lower()
+        for obs_var in bases.keys():
+            if obs_var == intervention_variable:
+                continue
+            p_intervention[obs_var] = dict()
+            for observation in range(0, bases[obs_var]):
+                for intervention in range(0, new_bases[intervention_variable]):
+                    intervention_index = dict(zip(bases.keys(), [':'] * len(bases.keys())))
+                    intervention_index[intervention_variable] = str(intervention)
+                    index = str(intervention) + '_' + str(observation)
+                    denom = eval('contingency_table[' + ','.join(intervention_index.values()) + '].sum()')
+                    if denom == 0:
+                        p_intervention[obs_var][index] = 0.0
+                    else:
+                        intervention_index[obs_var] = str(observation)
+                        p_intervention[obs_var][index] = eval('contingency_table[' + ','.join(intervention_index.values()) + '].sum()') / denom
+
+    # contingency_tables = dict({k: None for k in bases.keys()})
+    # contingency_tables['x'] = np.ones(tuple([v for v in bases.values()]))
+    # contingency_tables['x'][0, 0] = contingency_table[0, 0]
+    # contingency_tables['x'][1, 1] = contingency_table[1, 1]
+    # contingency_tables['y'] = np.ones(tuple([v for v in bases.values()]))
+    # contingency_tables['y'][0, 1] = contingency_table[0, 1]
+    # contingency_tables['y'][1, 0] = contingency_table[1, 0]
+    # for _ in hidden_variables:
+    #     for obs_var in bases.keys():
+    #         p_intervention[obs_var] = dict()
+    #         for observation in range(0, bases[obs_var]):
+    #             for intervention in range(0, 2):
+    #                 intervention_index = dict(zip(bases.keys(), [':'] * len(bases.keys())))
+    #                 index = str(intervention) + '_' + str(observation)
+    #                 denom = eval('contingency_tables[\''+ obs_var + '\'][' + ','.join(intervention_index.values()) + '].sum()')
+    #                 if denom == 0:
+    #                     p_intervention[obs_var][index] = 0.0
+    #                 else:
+    #                     intervention_index[obs_var] = str(observation)
+    #                     p_intervention[obs_var][index] = eval('contingency_tables[\''+ obs_var + '\'][' + ','.join(intervention_index.values()) + '].sum()') / denom
+
+    return p_intervention
+
+
 def get_probabilities_intervention(contingency_table: List[List[int]], base_x: int, base_y: int) -> Dict[str, float]:
     p_intervention = dict()
     for x_i in range(0, base_x):
@@ -103,41 +194,43 @@ def get_probabilities_intervention(contingency_table: List[List[int]], base_x: i
     return p_intervention
 
 
-def discretize_data(data: pd.DataFrame, bins: int) -> pd.DataFrame:
+def discretize_data(data: pd.DataFrame, bins: int, observation_variables: List[str]) -> pd.DataFrame:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         disc = pd.DataFrame(KBinsDiscretizer(n_bins=bins, encode='ordinal', strategy='uniform').
-                            fit_transform(data[['X', 'Y']]))
-        disc.columns = ['X', 'Y']
+                            fit_transform(data[observation_variables]))
+        disc.columns = observation_variables
         return disc
 
 
-def cluster_data(data: pd.DataFrame, intervention_column: str, nb_clusters: int) \
-        -> Tuple[Tuple[Any, Any, Any, Any], pd.DataFrame]:
+def cluster_data(data: pd.DataFrame, intervention_column: str, observation_variables: List[str], nb_clusters: int) \
+        -> Tuple[Tuple[pd.DataFrame, pd.DataFrame], pd.DataFrame]:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        cluster = KMeans(n_clusters=nb_clusters).fit(data[['X', 'Y']])
+        cluster = KMeans(n_clusters=nb_clusters).fit(data[observation_variables])
         data['labels'] = cluster.labels_
-    return split_at_clustered_labels(data, intervention_column, nb_clusters), data
+    return split_at_clustered_labels(data, intervention_column, observation_variables, nb_clusters), data
 
 
-def split_at_clustered_labels(data: pd.DataFrame, intervention_column: str, nb_clusters: int) \
-        -> Tuple[Any, Any, Any, Any]:
+def split_at_clustered_labels(data: pd.DataFrame, intervention_column: str, observation_variables: List[str], nb_clusters: int) \
+        -> Tuple[pd.DataFrame, pd.DataFrame]:
     # calc variances in the clusters
     var = dict()
+    if intervention_column == '':
+        intervention_column = 'X'
+
     for i_cluster in range(nb_clusters):
         var[i_cluster] = data[data['labels'] == i_cluster][intervention_column].var()
 
     for i_cluster in range(nb_clusters):
         if not np.isnan(var[i_cluster]) and \
                 var[i_cluster] <= min([val for i, val in var.items() if (i is not i_cluster and not np.isnan(val))]):
-            return data[data['labels'] == i_cluster]['X'], \
-                   data[data['labels'] == i_cluster]['Y'], \
-                   data[(data['labels'] != i_cluster)]['X'], \
-                   data[(data['labels'] != i_cluster)]['Y']
+            obs_pdf = pd.DataFrame({col.lower(): data[data['labels'] == i_cluster][col] for col in observation_variables})
+            int_pdf = pd.DataFrame({col.lower(): data[(data['labels'] != i_cluster)][col] for col in observation_variables})
+            return obs_pdf, int_pdf
 
 
-def split_data(data, col_to_prepare, sort_data=True):
+def split_data(data, col_to_prepare, observation_variables: List[str], sort_data=True) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
     if sort_data:
         prep_data = data.sort_values(by=[col_to_prepare]).reset_index()
     else:
@@ -157,46 +250,54 @@ def split_data(data, col_to_prepare, sort_data=True):
         if abs(prep_data[col_to_prepare][i - 1] - prep_data[col_to_prepare][i]) > max_diff:
             max_diff = abs(prep_data[col_to_prepare][i - 1] - prep_data[col_to_prepare][i])
             i_max = i
-    return prep_data['X'][0:i_max], prep_data['Y'][0:i_max], prep_data['X'][i_max:], prep_data['Y'][i_max:], i_max
+
+    obs_pdf = pd.DataFrame({col.lower(): prep_data[col][0:i_max] for col in observation_variables})
+    int_pdf = pd.DataFrame({col.lower(): prep_data[col][i_max:] for col in observation_variables})
+    return obs_pdf, int_pdf, i_max
 
 
-def split_data_at_index(data: pd.DataFrame, idx: int) -> Tuple[Any, Any, Any, Any]:
-    return data['X'][0:idx], data['Y'][0:idx], data['X'][idx:], data['Y'][idx:]
+def split_data_at_index(data: pd.DataFrame, idx: int, observation_variables: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    obs_pdf = pd.DataFrame({col.lower(): data[col][0:idx] for col in observation_variables})
+    int_pdf = pd.DataFrame({col.lower(): data[col][idx:2*idx] for col in observation_variables})
+    return obs_pdf, int_pdf
 
 
-def find_best_cluster(data: pd.DataFrame, intervention_column: str, max_nb_clusters: int) \
-        -> Tuple[Tuple[Tuple[Any, Any, Any, Any], pd.DataFrame], int]:
+def find_best_cluster(data: pd.DataFrame, intervention_column: str, observation_variables: List[str], max_nb_clusters: int) \
+        -> Tuple[Tuple[Tuple[pd.DataFrame, pd.DataFrame], pd.DataFrame], int]:
     if kl_divergence_x_y(data, -1) == np.inf:
         nb_bins_for_distr = 10
     else:
         nb_bins_for_distr = -1
     min_kl_div = np.inf
     best_nb_clusters = 2
-    for nb_clusters in range(2, min(max_nb_clusters,40)):
-        (obs_x, obs_y, int_x, int_y), clustered_data = cluster_data(data, intervention_column, nb_clusters)
-        if intervention_column == 'X':
-            obs_pdf = pd.concat([obs_x, obs_y], axis=1)
-            int_pdf = pd.concat([int_x, int_y], axis=1)
-        else:
-            obs_pdf = pd.concat([obs_y, obs_x], axis=1)
-            int_pdf = pd.concat([int_y, int_x], axis=1)
-        kl_div = kl_divergence_x_y(obs_pdf, nb_bins_for_distr) + kl_divergence_x_y(int_pdf, nb_bins_for_distr)
+    for nb_clusters in range(2, min(max_nb_clusters, 40)):
+        (obs_pdf, int_pdf), clustered_data = cluster_data(data, intervention_column, observation_variables, nb_clusters)
+        if intervention_column == 'X' or intervention_column == '':
+            obs_ = pd.concat([obs_pdf['x'], obs_pdf['y']], axis=1)
+            int_ = pd.concat([int_pdf['x'], int_pdf['y']], axis=1)
+        elif intervention_column == 'Y':
+            obs_ = pd.concat([obs_pdf['y'], obs_pdf['x']], axis=1)
+            int_ = pd.concat([int_pdf['y'], int_pdf['x']], axis=1)
+        elif intervention_column == 'Z':
+            obs_ = pd.concat([obs_pdf['z'], obs_pdf['x'], obs_pdf['y']], axis=1)
+            int_ = pd.concat([int_pdf['z'], int_pdf['x'], int_pdf['y']], axis=1)
+        kl_div = kl_divergence_x_y(obs_, nb_bins_for_distr) + kl_divergence_x_y(int_, nb_bins_for_distr)
         if kl_div < min_kl_div:
             min_kl_div = kl_div
             best_nb_clusters = nb_clusters
 
-    return cluster_data(data, intervention_column, best_nb_clusters), best_nb_clusters
+    return cluster_data(data, intervention_column, observation_variables, best_nb_clusters), best_nb_clusters
 
 
-def find_best_discretization(data: pd.DataFrame) -> pd.DataFrame:
+def find_best_discretization(data: pd.DataFrame, observation_variables: List[str]) -> pd.DataFrame:
     min_kl_div = np.inf
     max_nb_bins = max(len(set(data['X'].tolist())), len(set(data['Y'].tolist())))
     best_nb_bins = 2
     for nb_bins in range(2, max_nb_bins * 10):
-        disc_data = discretize_data(data, nb_bins)
+        disc_data = discretize_data(data, nb_bins, observation_variables)
         kl_div = kl_divergence_x_y(disc_data, -1)
         if kl_div < min_kl_div:
             min_kl_div = kl_div
             best_nb_bins = nb_bins
 
-    return discretize_data(data, best_nb_bins)
+    return discretize_data(data, best_nb_bins, observation_variables)
