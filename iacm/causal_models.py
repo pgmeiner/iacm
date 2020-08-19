@@ -39,6 +39,9 @@ def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_in
     lines = generate_constraint_lines(pattern_data[base]['constraint_patterns'], size_prob, base)
     causal_model_data['B'] = np.array([[1] * size_prob] + lines)
 
+    causal_model_data['F'] = np.diag(np.array([1] * size_prob))
+    causal_model_data['c'] = np.array([0.0] * size_prob)
+
     zero_codes = get_zero_codes(pattern_data[base]['zero_code_patterns'], base)
     if monotone_decr:
         zero_codes.append('0001')
@@ -51,12 +54,11 @@ def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_in
     for i in range(0, size_prob):
         if base_repr(i, base, nb_variables) in causal_model_data['S_codes']:
             d_list.append(1)
+            #causal_model_data['c'][i] = 0.00000001
         else:
             d_list.append(0)
     causal_model_data['d'] = np.array(d_list)
 
-    causal_model_data['F'] = np.diag(np.array([1] * size_prob))
-    causal_model_data['c'] = np.array([0.0] * size_prob)
 
     return causal_model_data
 
@@ -85,6 +87,9 @@ def setup_model_data(base, causal_model: Dict[str, Any], monotone_incr=False, mo
     lines = generate_constraint_lines(pattern_data[base]['constraint_patterns'], size_prob, base)
     model_data['B'] = np.array([[1] * size_prob] + lines)
 
+    model_data['F'] = np.diag(np.array([1] * size_prob))
+    model_data['c'] = np.array([0.0] * size_prob)
+
     zero_codes = get_zero_codes(pattern_data[base]['zero_code_patterns'], base)
     if monotone_decr:
         zero_codes.append('0001')
@@ -97,12 +102,10 @@ def setup_model_data(base, causal_model: Dict[str, Any], monotone_incr=False, mo
     for i in range(0, size_prob):
         if base_repr(i, base, nb_variables) in model_data['S_codes']:
             d_list.append(1)
+            #model_data['c'][i] = 0.00000001
         else:
             d_list.append(0)
     model_data['d'] = np.array(d_list)
-
-    model_data['F'] = np.diag(np.array([1] * size_prob))
-    model_data['c'] = np.array([0.0] * size_prob)
 
     return model_data
 

@@ -373,7 +373,7 @@ def decide_best_model(model_x_to_y: Dict[str, Any], model_y_to_x: Dict[str, Any]
         print("total Error Y -> X: " + str(error_y_to_x))
 
     if abs(error_x_to_y - error_y_to_x) < error_tolerance:
-        if monotone or ('PNS' in model_x_to_y and 'PNS' in model_y_to_x):
+        if monotone and ('PNS' in model_x_to_y and 'PNS' in model_y_to_x):
             pns_xto_y = model_x_to_y['PNS']
             pns_yto_x = model_y_to_x['PNS']
             if abs(pns_xto_y-pns_yto_x) < tolerance:

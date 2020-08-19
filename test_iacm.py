@@ -304,6 +304,7 @@ def test_iacm_discovery_confounded_hidden_2():
                                     causal_models=['X->Y', 'X|Y', 'X<-[Z]->Y', '[Z]->X->Y'], preserve_order=False)
     assert ground_truth in result
 
+
 def test_iacm():
     structure = 'nonlinear_discrete'
     sample_sizes = [100, 500, 1000]
