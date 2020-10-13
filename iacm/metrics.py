@@ -57,14 +57,26 @@ def kl_divergence_x_y(data: pd.DataFrame, nr_bins: int) -> float:
     return kl_divergence(p_x, p_y)
 
 
-def get_kl_between_x_y(model_results: Dict[str, Any]) -> float:
-    p_hat = model_results['p_hat']
-    p_x = get_distr_x(p_hat)
-    p_y = get_distr_y(p_hat)
-    return kl_divergence(p_x, p_y)
+def get_kl_between_x_y(model_results: Dict[str, Any], base_x: int, base_y: int) -> float:
+    if 'p_hat' in model_results:
+        p_hat = model_results['p_hat']
+        p_x = get_distr_x(p_hat, base_x)
+        p_y = get_distr_y(p_hat, base_y)
+        return kl_divergence(p_x, p_y)
+    else:
+        return np.inf
 
 
-def get_distr_y(p_hat: Dict[str, float]) -> List[float]:
+def get_distr_y(p_hat: Dict[str, float], base_y: int) -> List[float]:
+    distr = []
+    for y in range(0, base_y):
+        y_sum = 0
+        for k, v in p_hat.items():
+            if str(y) == k[1]:
+                y_sum = y_sum + v
+        distr.append(y_sum)
+
+    return [dist / sum(distr) for dist in distr]
     distr = [p_hat['0000'] + p_hat['0001'] + p_hat['0010'] + p_hat['0011'] + p_hat['1000'] + p_hat['1001'] +
              p_hat['1010'] + p_hat['1011'],
              p_hat['0100'] + p_hat['0101'] + p_hat['0110'] + p_hat['0111'] + p_hat['1100'] + p_hat['1101'] +
@@ -72,7 +84,17 @@ def get_distr_y(p_hat: Dict[str, float]) -> List[float]:
     return distr / sum(distr)
 
 
-def get_distr_x(p_hat: Dict[str, float]) -> List[float]:
+def get_distr_x(p_hat: Dict[str, float], base_x: int) -> List[float]:
+    distr = []
+    for x in range(0, base_x):
+        x_sum = 0
+        for k, v in p_hat.items():
+            if str(x) == k[0]:
+                x_sum = x_sum + v
+        distr.append(x_sum)
+
+    return [dist / sum(distr) for dist in distr]
+
     distr = [p_hat['0000'] + p_hat['0001'] + p_hat['0010'] + p_hat['0011'] + p_hat['0100'] + p_hat['0101'] +
              p_hat['0110'] + p_hat['0111'],
              p_hat['1000'] + p_hat['1001'] + p_hat['1010'] + p_hat['1011'] + p_hat['1100'] + p_hat['1101'] +

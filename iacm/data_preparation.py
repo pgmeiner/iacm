@@ -230,6 +230,74 @@ def split_at_clustered_labels(data: pd.DataFrame, intervention_column: str, obse
             return obs_pdf, int_pdf
 
 
+def split_with_balancing(data: pd.DataFrame, intervention_column: str, observation_variables: List[str]) \
+        -> Tuple[pd.DataFrame, pd.DataFrame]:
+
+    intervention_alphabet = data[intervention_column].unique()
+    nb_intervention_alphabet = len(intervention_alphabet)
+    bucket_pool = dict()
+    for int_letter in intervention_alphabet:
+        bucket_pool[int_letter] = data[data[intervention_column] == int_letter][observation_variables].reset_index(drop=True)
+
+    bucket_size = max(data[intervention_column].value_counts().tolist())
+    obs_bucket = []
+    for i in range(0, bucket_size):
+        pool_to_draw = intervention_alphabet[np.random.randint(0, nb_intervention_alphabet)]
+        pool_size = bucket_pool[pool_to_draw].shape[0]
+        data_to_draw = np.random.randint(0, pool_size)
+        obs_bucket.append(tuple(bucket_pool[pool_to_draw].iloc[data_to_draw].tolist()))
+
+    int_bucket = []
+    for int_letter in intervention_alphabet:
+        pool_size = bucket_pool[int_letter].shape[0]
+        for i in range(0, bucket_size):
+            data_to_draw = np.random.randint(0, pool_size)
+            int_bucket.append(tuple(bucket_pool[int_letter].iloc[data_to_draw].tolist()))
+
+    observation_variables = [s.lower() for s in observation_variables]
+    obs_pdf = pd.DataFrame(obs_bucket, columns=observation_variables)
+    int_pdf = pd.DataFrame(int_bucket, columns=observation_variables)
+    return obs_pdf, int_pdf
+
+
+def split_with_equal_variance(data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    nb_data_points = data.shape[0]
+    nb_data_points_per_split = int(data.shape[0] / 2)
+    obs_list = []
+    draw_pool = list(np.arange(0, nb_data_points))
+    for i in range(0, nb_data_points_per_split):
+        data_to_draw = np.random.randint(0, len(draw_pool))
+        obs_list.append(tuple(data.iloc[draw_pool[data_to_draw]].tolist()))
+        draw_pool.pop(data_to_draw)
+    int_list = []
+    draw_pool = list(np.arange(0, nb_data_points))
+    for i in range(0, nb_data_points_per_split):
+        data_to_draw = np.random.randint(0, len(draw_pool))
+        int_list.append(tuple(data.iloc[draw_pool[data_to_draw]].tolist()))
+        draw_pool.pop(data_to_draw)
+
+    return pd.DataFrame(obs_list, columns=data.columns), pd.DataFrame(int_list, columns=data.columns)
+
+
+def split_bucket(data: pd.DataFrame, intervention_column: str, observation_variables: List[str]) \
+        -> Tuple[pd.DataFrame, pd.DataFrame]:
+
+    intervention_alphabet = data[intervention_column].unique()
+    obs_list = []
+    int_list = []
+    for int_letter in intervention_alphabet:
+        bucket_pool = data[data[intervention_column] == int_letter][observation_variables].reset_index(drop=True)
+        obs_pool, int_pool = split_with_equal_variance(bucket_pool)
+        obs_list.append(obs_pool)
+        int_list.append(int_pool)
+
+    obs_pdf = pd.concat(obs_list, axis=0)
+    int_pdf = pd.concat(int_list, axis=0)
+    obs_pdf.columns = ['x', 'y']
+    int_pdf.columns = ['x', 'y']
+    return obs_pdf, int_pdf
+
+
 def split_data(data, col_to_prepare, observation_variables: List[str], sort_data=True) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
     if sort_data:
         prep_data = data.sort_values(by=[col_to_prepare]).reset_index()

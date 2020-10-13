@@ -7,7 +7,7 @@ from typing import List, Dict, Tuple, Any, Union
 from iacm.data_preparation import get_probabilities, get_probabilities_intervention, write_contingency_table, \
     get_contingency_table, discretize_data, cluster_data, split_data, split_data_at_index, split_at_clustered_labels, \
     find_best_cluster, find_best_discretization, get_contingency_table_general, get_probabilities_general, \
-    get_probabilities_intervention_general
+    get_probabilities_intervention_general, split_with_balancing, split_bucket
 from iacm.causal_models import setup_model_data, base_repr, setup_causal_model_data, causal_model_definition
 from iacm.metrics import get_kl_between_x_y, calc_error, get_distr_xy, kl_divergence
 from sklearn.cluster import SpectralClustering
@@ -20,6 +20,7 @@ model_data['3_3'] = setup_model_data(base=3, causal_model=causal_model_definitio
 model_data['4_4'] = setup_model_data(base=4, causal_model=causal_model_definition['X->Y'])
 model_data['2_2_X|Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X|Y'])
 model_data['2_2_X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X->Y'])
+model_data['3_3_X->Y'] = setup_causal_model_data(base=3, causal_model=causal_model_definition['X->Y'])
 model_data['2_2_2_X<-Z->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X<-Z->Y'])
 model_data['2_2_X<-[Z]->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['X<-[Z]->Y'])
 model_data['2_2_Z->X->Y'] = setup_causal_model_data(base=2, causal_model=causal_model_definition['Z->X->Y'])
@@ -197,26 +198,45 @@ def find_best_approximation_to_model(constraint_data: Dict[str, float], meta_dat
     base = meta_data['base_x']
     nb_variables = meta_data['nb_variables']
     B = meta_data['B']
-    d = meta_data['d']
+    d = meta_data['d'].copy()
     F = meta_data['F']
     c = meta_data['c']
-    s_codes = meta_data['S_codes']
+    s_codes = meta_data['S_codes'].copy()
 
     b = np.array([1.0] + [constraint_data[pattern] for pattern in meta_data['constraint_patterns']])
 
-    # create and run the solver
-    x = cp.Variable(shape=size_prob)
-    obj = cp.Minimize(cp.sum(d * x))
-    constraints = [B * x == b,
-                   F * x >= c]
-    prob = cp.Problem(obj, constraints)
-    prob.solve(solver=cp.SCS, verbose=False)
+    v_max = 0
+    x_max = None
+    max_weights = None
+    for weighted_elements in [([0,1],[13,15]),([13,15],[0,1]),([6,7],[8,10]),([8,10],[6,7])]:
+        d = meta_data['d'].copy()
+        for i in weighted_elements[0]:
+            d[i] = 3*d[i]
+        for i in weighted_elements[1]:
+            d[i] = 0*d[i]
+
+        # create and run the solver
+        x = cp.Variable(shape=size_prob)
+        obj = cp.Maximize(cp.sum(d * x))
+        constraints = [B * x == b,
+                       F * x >= c]
+        prob = cp.Problem(obj, constraints)
+        v = prob.solve(solver=cp.SCS, verbose=False)
+        if v is not None and v > v_max:
+            v_max = v
+            x_max = x.value
+            max_weights = weighted_elements
 
     # get the solution
-    if x.value is None:
+    if x_max is None:
         return result
 
-    simplex_res = x.value
+    for i in max_weights[1]:
+        code = base_repr(i, base, nb_variables)
+        if code in s_codes:
+            s_codes.remove(code)
+
+    simplex_res = x_max
 
     p_hat = dict()
 
@@ -309,6 +329,10 @@ def preprocessing(data: pd.DataFrame, V: str, intervention_column: str, preserve
     if parameters['preprocess_method'] == 'none':
         split_idx = int(data.shape[0] / 2)
         obs_pdf, int_pdf = split_data_at_index(data, split_idx, observation_variables)
+    elif parameters['preprocess_method'] == 'split':
+        obs_pdf, int_pdf = split_bucket(data, intervention_column, observation_variables)
+    elif parameters['preprocess_method'] == 'sort_and_balance':
+        obs_pdf, int_pdf = split_with_balancing(data, intervention_column, observation_variables)
     elif parameters['preprocess_method'] == 'cluster_discrete':
         if parameters['nb_cluster'] == -1:
             (_, clustered_data), best_nb_clusters = find_best_cluster(data, intervention_column, observation_variables, parameters['bins'])
@@ -350,7 +374,7 @@ def find_best_model_x_to_y(base_x: int, base_y: int, data: Tuple[Any, Any, Any, 
     model_x_to_y_not_monotone = test_model_from_x_to_y(base_x=base_x, base_y=base_y, obs_x=data[0], obs_y=data[1],
                                                        int_x=data[2], int_y=data[3], monotone=False,
                                                        causal_model=model_data['2_2'], verbose=verbose)
-    if calc_error(model_x_to_y_monotone) <= calc_error(model_x_to_y_not_monotone):
+    if abs(calc_error(model_x_to_y_monotone) - calc_error(model_x_to_y_not_monotone)) < 0.01:
         model_x_to_y = model_x_to_y_monotone
     else:
         model_x_to_y = model_x_to_y_not_monotone
@@ -358,15 +382,25 @@ def find_best_model_x_to_y(base_x: int, base_y: int, data: Tuple[Any, Any, Any, 
 
 
 def decide_best_model(model_x_to_y: Dict[str, Any], model_y_to_x: Dict[str, Any], monotone: bool, verbose: bool,
-                      strategy: str = 'kl_dist', tolerance: float = 1.0e-05) -> Dict[str, Any]:
+                        base_x: int, base_y: int, strategy: str = 'kl_dist', tolerance: float = 1.0e-05) -> Dict[str, Any]:
     best_model = dict()
     if strategy == 'kl_dist':
         error_x_to_y = calc_error(model_x_to_y)
         error_y_to_x = calc_error(model_y_to_x)
         error_tolerance = 0.01
-    else:
-        error_x_to_y = get_kl_between_x_y(model_x_to_y)
-        error_y_to_x = get_kl_between_x_y(model_y_to_x)
+    elif strategy == 'kl_xy':
+        error_x_to_y = get_kl_between_x_y(model_x_to_y, base_x, base_y)
+        error_y_to_x = get_kl_between_x_y(model_y_to_x, base_x, base_y)
+        error_tolerance = 1.0e-12
+    elif strategy == 'local_xy_error':
+        if 'kl_p_tilde_p_hat' in model_x_to_y:
+            error_x_to_y = model_x_to_y['kl_p_tilde_p_hat']
+        else:
+            error_x_to_y = np.inf
+        if 'kl_p_tilde_p_hat' in model_y_to_x:
+            error_y_to_x = model_y_to_x['kl_p_tilde_p_hat']
+        else:
+            error_y_to_x = np.inf
         error_tolerance = 1.0e-12
     if verbose:
         print("total Error X -> Y: " + str(error_x_to_y))
@@ -560,22 +594,23 @@ def iacm_discovery_pairwise(base_x: int, base_y: int, data: pd.DataFrame, auto_c
                                               verbose=verbose)
         model_y_to_x = find_best_model_x_to_y(base_x=base_x, base_y=base_y, data=(y_obs_pdf['y'], y_obs_pdf['x'], y_int_pdf['y'], y_int_pdf['x']),
                                               verbose=verbose)
-        result = decide_best_model(model_x_to_y, model_y_to_x, True, verbose, strategy='kl_dist')
-        result_xy = decide_best_model(model_x_to_y, model_y_to_x, True, verbose, strategy='kl_xy')
     else:
+        model_index = f'{base_x}_{base_y}_X->Y'
         model_x_to_y = test_model_from_x_to_y(base_x, base_y, x_obs_pdf['x'], x_obs_pdf['y'], x_int_pdf['x'], x_int_pdf['y'], False,
-                                              model_data['2_2_X->Y'], verbose)
+                                              model_data[model_index], verbose)
         model_y_to_x = test_model_from_x_to_y(base_x, base_y, y_obs_pdf['y'], y_obs_pdf['x'], y_int_pdf['y'], y_int_pdf['x'], False,
-                                              model_data['2_2_X->Y'], verbose)
-        result = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_dist')
-        result_xy = decide_best_model(model_x_to_y, model_y_to_x, False, verbose, strategy='kl_xy')
+                                              model_data[model_index], verbose)
 
+    monotone = base_x == base_y == 2
     if parameters['decision_criteria'] == 'global_error':
+        result = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, base_x, base_y, strategy='kl_dist')
         return result['result'], result['min_error']
     elif parameters['decision_criteria'] == 'kl_xy':
+        result_xy = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, base_x, base_y, strategy='kl_xy')
         return result_xy['result'], result_xy['min_error']
-    else:
-        return (result['result'], result_xy['result']), (result['min_error'], result_xy['min_error'])
+    elif parameters['decision_criteria'] == 'local_xy_error':
+        result_xy = decide_best_model(model_x_to_y, model_y_to_x, monotone, verbose, base_x, base_y, strategy='local_xy_error')
+        return result_xy['result'], result_xy['min_error']
 
 
 def iacm_discovery_timeseries(base_x: int, base_y: int, data: pd.DataFrame, auto_configuration: bool,

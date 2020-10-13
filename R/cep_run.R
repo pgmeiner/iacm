@@ -65,11 +65,11 @@ check_result <- function(model_output, ground_truth) {
 correct = 0
 not_correct = 0
 no_decision = 0
-simulation = FALSE
-dataset = "Abalone"
-method = 'HCR'
+simulation = TRUE
+dataset = "own"
+method = 'nonICP'
 if (simulation == TRUE) {
-  directory = "../simulations/add_mult/linear_continuous/2_2/"
+  directory = "../simulations/add_mult/linear_discrete/4_11/"
 }
 if (dataset == 'Food') {
   directory = "../real_world_data/food_intolerances/"

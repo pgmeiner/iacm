@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import t
-from typing import Callable
+from typing import Callable, List
 
 
 def get_discrete_random_number(sample_size: int, alphabet_size: int) -> np.ndarray:
@@ -54,7 +54,6 @@ def get_nonlinear_function_two_args() -> Callable[[np.array, np.array, np.array]
             return lambda x, z, n: np.sign(x) * np.sqrt(np.abs(x)) * np.sign(z) * np.sqrt(np.abs(z)) * n
 
 
-
 def get_linear_function() -> Callable[[np.array, np.array], np.array]:
     alpha = np.random.normal(0, 10, 1)
     noise_model = np.random.randint(low=1, high=3, size=1)
@@ -74,6 +73,27 @@ def get_linear_function_two_args() -> Callable[[np.array, np.array, np.array], n
         return lambda x, z, n: alpha * x + beta * z + n
     else:
         return lambda x, z, n: (alpha * x + beta * z) * n
+
+
+def get_random_integer_excluding_integer_set(max_number: int, exclusion_set: List[int]):
+    next_rand = np.random.randint(low=0, high=max_number, size=1)[0]
+    while (next_rand in exclusion_set):
+        next_rand = np.random.randint(low=0, high=max_number, size=1)[0]
+
+    return next_rand
+
+
+def get_random_cyclic_function(alphabet_size_x: int, alphabet_size_y: int) -> Callable[[np.array, np.array], np.array]:
+    f = {}
+    for x in range(0, alphabet_size_x):
+        f[x] = get_random_integer_excluding_integer_set(alphabet_size_y, exclusion_set=[v for v in f.values()])
+
+    noise_model = 1# np.random.randint(low=1, high=3, size=1)[0]
+    # decides between additive or multiplicative model
+    if noise_model == 1:
+        return lambda x_1, n: [((f[i[0]] + n[i][0]) % alphabet_size_y) for i in x_1.tolist()]
+    else:
+        return lambda x_1, n: [((f[i[0]] * n[i][0]) % alphabet_size_y) for i in x_1.tolist()]
 
 
 def generate_discrete_data(structure: str, sample_size: int, alphabet_size_x: int,
@@ -263,3 +283,33 @@ def generate_discrete_data_confounded3(structure: str, sample_size: int, alphabe
     return pd.DataFrame(
         {'X': [el[0] for el in np.concatenate([obs_x, int_x])], 'Y': [el[0] for el in np.concatenate([obs_y, int_y])],
          'Z': [el[0] for el in np.concatenate([obs_z, int_z])]})
+
+
+def generate_discrete_cyclic_data(sample_size: int, alphabet_size_x: int, alphabet_size_y: int) -> pd.DataFrame:
+    """
+    Function that generates samples of discrete cyclic data following an underlying causal model X->Y with mod alphabet_size_y.
+    :param sample_size: number of samples to generate.
+    :param alphabet_size_x: range size of random variable X.
+    :param alphabet_size_y: range size of random variable Y.
+    :return: pandas dataframe with columns 'X', 'Y' containing the generated sample data.
+    """
+    if alphabet_size_x == alphabet_size_y == 2:
+        f = lambda x_1, n: [((i[0] + n[i][0]) % alphabet_size_y) for i in x_1.tolist()]
+    else:
+        f = get_random_cyclic_function(alphabet_size_x, alphabet_size_y)
+
+    nb_intervention_samples = int(sample_size / alphabet_size_x)
+    nb_samples = nb_intervention_samples * alphabet_size_x
+    obs_x = get_discrete_random_number(sample_size=nb_samples, alphabet_size=alphabet_size_x)
+    n = get_discrete_random_number(sample_size=nb_samples, alphabet_size=alphabet_size_y)
+    obs_y = np.array([int(el[0]) for el in f(obs_x, n)]).reshape(-1, 1)
+
+    # intervention data
+    int_x = np.array(np.concatenate(
+        [np.repeat(inter, nb_intervention_samples).tolist() for inter in range(0, alphabet_size_x)])).reshape(-1, 1)
+    n_int = get_discrete_random_number(sample_size=nb_samples, alphabet_size=alphabet_size_y)
+    int_y = np.array([int(el[0]) for el in f(int_x, n_int)]).reshape(-1, 1)
+
+    return pd.DataFrame(
+        {'X': [el[0] for el in np.concatenate([obs_x, int_x])], 'Y': [el[0] for el in np.concatenate([obs_y, int_y])],
+         'N': [el[0] for el in np.concatenate([n, n_int])]})
