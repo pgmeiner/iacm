@@ -1,6 +1,6 @@
 # Information-Theoretic Approximation to Causal Models
 
-This repository is the official implementation of Information-Theoretic Approximation to Causal Models. 
+This repository is the official implementation of Information-Theoretic Approximation to Causal Models (https://arxiv.org/abs/2007.15047). 
 
 ## Requirements
 
@@ -12,7 +12,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-This package offers methods for causal discovery using information-theoretic approximation to causal models for both
+This package offers methods for causal discovery and the calculation of causal effects using information-theoretic approximation to causal models for both
 i.i.d. data and timeseries data.
 
 For i.i.d. data use iacm_discovery() and for timeseries data use iacm_discovery_timeseries()

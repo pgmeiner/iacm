@@ -132,6 +132,13 @@ def calc_error(model_results: Dict[str, Any]) -> float:
         return np.inf
 
 
+def get_local_error(results: Dict[str, Any]) -> float:
+    if 'kl_p_tilde_p_hat' in results:
+        return results['kl_p_tilde_p_hat']
+    else:
+        return np.inf
+
+
 def tied_rank(x):
     """
     Computes the tied rank of elements in x.

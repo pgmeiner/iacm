@@ -120,18 +120,15 @@ def test_setup_model_data():
         assert_with_sort(model_data[signature]['constraint_patterns'], expected_model_data[signature]['constraint_patterns'])
         assert np.array_equal(model_data[signature]['d'], expected_model_data[signature]['d'])
         assert np.array_equal(model_data[signature]['F'], expected_model_data[signature]['F'])
-        assert np.array_equal(model_data[signature]['c'], expected_model_data[signature]['c'])
 
     for signature in ['3_3', '4_4', 'X|Y', '2_2_X<-Z->Y', '2_2_X<-[Z]->Y', 'Z->X->Y', '[Z]->X->Y']:
         assert_with_sort(model_data[signature]['S_codes'], expected_model_data[signature]['S_codes'])
         assert_with_sort(model_data[signature]['constraint_patterns'], expected_model_data[signature]['constraint_patterns'])
         assert np.array_equal(model_data[signature]['F'], expected_model_data[signature]['F'])
-        assert np.array_equal(model_data[signature]['c'], expected_model_data[signature]['c'])
 
     for signature in ['(X,Z)->Y', '(X,[Z])->Y']:
         assert_with_sort(model_data[signature]['constraint_patterns'],expected_model_data[signature]['constraint_patterns'])
         assert np.array_equal(model_data[signature]['F'], expected_model_data[signature]['F'])
-        assert np.array_equal(model_data[signature]['c'], expected_model_data[signature]['c'])
 
 
 def assert_with_sort(p1, p2):

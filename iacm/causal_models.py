@@ -2,16 +2,21 @@ from typing import Dict, Any, List
 import numpy as np
 from utils import insert, flatten, count_char
 
+obj_fct_weights_for_binary_case = [{0: 3, 1: 3, 13: 0, 15: 0},
+                                   {13: 3, 15: 3, 0: 0, 1: 0},
+                                   {6: 3, 7: 3, 8: 0, 10: 0},
+                                   {8: 3, 10: 3, 6: 0, 7: 0}]
 
 causal_model_definition = dict()
-causal_model_definition['X|Y'] = {'V': 'X,Y,X_y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X', 'Y'], 'hidden_variables': []}
-causal_model_definition['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': []}
-causal_model_definition['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3, 'interventional_variables': ['Z'], 'hidden_variables': []}
-causal_model_definition['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
-causal_model_definition['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3, 'interventional_variables': ['Z', 'X'], 'hidden_variables': []}
-causal_model_definition['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z']}
-causal_model_definition['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3, 'interventional_variables': ['X', 'Z'], 'hidden_variables': []}
-causal_model_definition['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': ['Z']}
+causal_model_definition['X|Y'] = {'V': 'X,Y,X_y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X', 'Y'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['X->Y+'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': [], 'obj_fct_weights': obj_fct_weights_for_binary_case}
+causal_model_definition['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3, 'interventional_variables': ['Z'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z'], 'obj_fct_weights': []}
+causal_model_definition['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3, 'interventional_variables': ['Z', 'X'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z'], 'obj_fct_weights': []}
+causal_model_definition['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3, 'interventional_variables': ['X', 'Z'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': ['Z'], 'obj_fct_weights': []}
 
 
 def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False) -> Dict[str, Any]:
@@ -29,6 +34,7 @@ def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_in
     causal_model_data['interventional_variables'] = causal_model['interventional_variables']
     causal_model_data['hidden_variables'] = causal_model['hidden_variables']
     causal_model_data['V'] = causal_model['V']
+    causal_model_data['obj_fct_weights'] = causal_model['obj_fct_weights']
 
     pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
                                          observed_variables_after_intervention=observed_variables_after_intervention,
@@ -76,6 +82,7 @@ def setup_model_data(base, causal_model: Dict[str, Any], monotone_incr=False, mo
     model_data['nb_variables'] = nb_variables
     model_data['size_prob'] = size_prob
     model_data['interventional_variables'] = causal_model['interventional_variables']
+    model_data['obj_fct_weights'] = causal_model['obj_fct_weights']
 
     pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
                                          observed_variables_after_intervention=observed_variables_after_intervention,

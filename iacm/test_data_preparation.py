@@ -113,7 +113,7 @@ def test_get_probabilities():
 def test_get_contingency_table_general():
     contingency_table = get_contingency_table_general(pd.DataFrame({'x': data_x, 'y': data_y}), {'x': 2, 'y': 2})
     probabilities = get_probabilities_general(contingency_table, {'x': 2, 'y': 2})
-    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'])['y']
+    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'], [])['y']
     assert probabilities['00'] == 0.27184466019417475
     assert probabilities['01'] == 0.24271844660194175
     assert probabilities['10'] == 0.2621359223300971
@@ -127,7 +127,7 @@ def test_get_contingency_table_general():
         pd.DataFrame({'x': [-10, 10, 2, 4, 6, 0, 3, 4, 100, 0, 1], 'y': [200, 400, 3, 5, 6, 2, 3, 4, 5, 0, -1]}),
         {'x': 2, 'y': 2})
     probabilities = get_probabilities_general(contingency_table, {'x': 2, 'y': 2})
-    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'])['y']
+    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'], [])['y']
     assert probabilities['00'] == 0.4
     assert probabilities['01'] == 0.13333333333333333
     assert probabilities['10'] == 0.13333333333333333
@@ -141,7 +141,7 @@ def test_get_contingency_table_general():
         pd.DataFrame({'x': [0, 1, 2, 3, 4, 5, 5, 5, 8, 9, 10], 'y': [0, 10, 20, 30, 40, 50, 50, 70, 80, 90, 90]}),
         {'x': 2, 'y': 2})
     probabilities = get_probabilities_general(contingency_table, {'x': 2, 'y': 2})
-    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'])['y']
+    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'], [])['y']
     assert probabilities['00'] == 0.5333333333333333
     assert probabilities['01'] == 0.13333333333333333
     assert probabilities['10'] == 0.06666666666666667
@@ -155,7 +155,7 @@ def test_get_contingency_table_general():
         pd.DataFrame({'x': [0, 10, 20, 30, 40, 50, 50, 70, 80, 90, 90], 'y': [0, 1, 2, 3, 4, 5, 5, 5, 8, 9, 10]}),
         {'x': 2, 'y': 2})
     probabilities = get_probabilities_general(contingency_table, {'x': 2, 'y': 2})
-    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'])['y']
+    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 2, 'y': 2}, ['x'], [])['y']
     assert probabilities['00'] == 0.5333333333333333
     assert probabilities['01'] == 0.06666666666666667
     assert probabilities['10'] == 0.13333333333333333
@@ -169,7 +169,7 @@ def test_get_contingency_table_general():
         pd.DataFrame({'x': [0, 10, 20, 30, 40, 50, 50, 70, 80, 90], 'y': [0, 1, 2, 3, 4, 5, 5, 5, 8, 9]}),
         {'x': 3, 'y': 3})
     probabilities = get_probabilities_general(contingency_table, {'x': 3, 'y': 3})
-    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 3, 'y': 3}, ['x'])['y']
+    int_probabilities = get_probabilities_intervention_general(contingency_table, {'x': 3, 'y': 3}, ['x'], [])['y']
     assert probabilities['00'] == 0.2631578947368421
     assert probabilities['01'] == 0.05263157894736842
     assert probabilities['02'] == 0.05263157894736842
