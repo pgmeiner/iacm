@@ -75,7 +75,7 @@ Currently there are the following possibilities:
 The entry ```'decision_criteria'``` specifies which decision criteria is used in order to decide the causal direction. You can either use
 ```'global_error'``` or ```'local_xy_error'``` as a decision criterion. See paper and Supplementary Material for more details.
 
-You can find a running example in ```test/main.py```.
+You can find a running example in ```main.py```.
 
 ## Citing 
 Please cite us when you are using this package as follows:
