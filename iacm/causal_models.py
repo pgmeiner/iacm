@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 import numpy as np
-from utils import insert, flatten, count_char
+from iacm.utils import insert, flatten, count_char
 
 obj_fct_weights_for_binary_case = [{0: 3, 1: 3, 13: 0, 15: 0},
                                    {13: 3, 15: 3, 0: 0, 1: 0},
