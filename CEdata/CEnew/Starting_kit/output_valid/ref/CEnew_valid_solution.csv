@@ -1,0 +1,10 @@
+SampleID,Target,Usage
+valid1,-1,PublicTest
+valid2,-1,PublicTest
+valid3,0,PublicTest
+valid4,0,PublicTest
+valid5,0,PublicTest
+valid6,-1,PublicTest
+valid7,1,PublicTest
+valid8,0,PublicTest
+valid9,0,PublicTest
