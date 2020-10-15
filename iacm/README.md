@@ -77,7 +77,7 @@ The entry ```'decision_criteria'``` specifies which decision criteria is used in
 
 You can find a running example in ```test/main.py```.
 
-##Citing 
+## Citing 
 Please cite us when you are using this package as follows:
 
 Peter Gmeiner: Information-Theoretic Approximation to Causal Models. 2020. https://arxiv.org/abs/2007.15047
