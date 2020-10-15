@@ -4,7 +4,7 @@ import warnings
 import itertools
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.cluster import KMeans
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple
 
 from iacm.metrics import kl_divergence_x_y
 

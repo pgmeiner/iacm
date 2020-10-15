@@ -233,9 +233,9 @@ def get_result(method, file, data, statistics, preprocessing_stat, base_x, base_
         preprocessing_stat[file][preprocess_method] = dict()
 
         if file in timeseries_files:
-            res, crit = iacm_discovery_timeseries(base_x=base_x, base_y=base_y, data=data, auto_configuration=auto_configuration, parameters=params, max_lag=50, verbose=verbose)
+            res, crit = iacm_discovery_timeseries(base_x=base_x, base_y=base_y, data=data, parameters=params, max_lag=50, verbose=verbose)
         else:
-            res, crit = iacm_discovery_pairwise(base_x=base_x, base_y=base_y, data=data, auto_configuration=auto_configuration, parameters=params, verbose=False, preserve_order=False)
+            res, crit = iacm_discovery_pairwise(base_x=base_x, base_y=base_y, data=data, parameters=params, verbose=False, preserve_order=False)
             #iacm_discovery(bases={'x': base_x, 'y': base_y}, data=data, auto_configuration=False, parameters=params, causal_models=['X->Y'], preserve_order=False)
 
         # plot_distributions()

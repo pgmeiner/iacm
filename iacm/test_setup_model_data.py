@@ -1,5 +1,5 @@
 import numpy as np
-from iacm.causal_models import setup_model_data, setup_causal_model_data, causal_model_definition
+from iacm.causal_models import setup_causal_model_data, causal_model_definition
 
 expected_model_data = dict()
 expected_model_data['2_2'] = {
@@ -120,18 +120,15 @@ def test_setup_model_data():
         assert_with_sort(model_data[signature]['constraint_patterns'], expected_model_data[signature]['constraint_patterns'])
         assert np.array_equal(model_data[signature]['d'], expected_model_data[signature]['d'])
         assert np.array_equal(model_data[signature]['F'], expected_model_data[signature]['F'])
-        assert np.array_equal(model_data[signature]['c'], expected_model_data[signature]['c'])
 
     for signature in ['3_3', '4_4', 'X|Y', '2_2_X<-Z->Y', '2_2_X<-[Z]->Y', 'Z->X->Y', '[Z]->X->Y']:
         assert_with_sort(model_data[signature]['S_codes'], expected_model_data[signature]['S_codes'])
         assert_with_sort(model_data[signature]['constraint_patterns'], expected_model_data[signature]['constraint_patterns'])
         assert np.array_equal(model_data[signature]['F'], expected_model_data[signature]['F'])
-        assert np.array_equal(model_data[signature]['c'], expected_model_data[signature]['c'])
 
     for signature in ['(X,Z)->Y', '(X,[Z])->Y']:
         assert_with_sort(model_data[signature]['constraint_patterns'],expected_model_data[signature]['constraint_patterns'])
         assert np.array_equal(model_data[signature]['F'], expected_model_data[signature]['F'])
-        assert np.array_equal(model_data[signature]['c'], expected_model_data[signature]['c'])
 
 
 def assert_with_sort(p1, p2):

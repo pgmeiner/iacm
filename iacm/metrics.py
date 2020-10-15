@@ -77,11 +77,6 @@ def get_distr_y(p_hat: Dict[str, float], base_y: int) -> List[float]:
         distr.append(y_sum)
 
     return [dist / sum(distr) for dist in distr]
-    distr = [p_hat['0000'] + p_hat['0001'] + p_hat['0010'] + p_hat['0011'] + p_hat['1000'] + p_hat['1001'] +
-             p_hat['1010'] + p_hat['1011'],
-             p_hat['0100'] + p_hat['0101'] + p_hat['0110'] + p_hat['0111'] + p_hat['1100'] + p_hat['1101'] +
-             p_hat['1110'] + p_hat['1111']]
-    return distr / sum(distr)
 
 
 def get_distr_x(p_hat: Dict[str, float], base_x: int) -> List[float]:
@@ -95,12 +90,6 @@ def get_distr_x(p_hat: Dict[str, float], base_x: int) -> List[float]:
 
     return [dist / sum(distr) for dist in distr]
 
-    distr = [p_hat['0000'] + p_hat['0001'] + p_hat['0010'] + p_hat['0011'] + p_hat['0100'] + p_hat['0101'] +
-             p_hat['0110'] + p_hat['0111'],
-             p_hat['1000'] + p_hat['1001'] + p_hat['1010'] + p_hat['1011'] + p_hat['1100'] + p_hat['1101'] +
-             p_hat['1110'] + p_hat['1111']]
-    return distr / sum(distr)
-
 
 def get_distr_xy(p: Dict[str, float], base_x: int, base_y: int) -> List[float]:
     distr = []
@@ -110,7 +99,7 @@ def get_distr_xy(p: Dict[str, float], base_x: int, base_y: int) -> List[float]:
             for k, v in p.items():
                 xy = str(x) + str(y)
                 if xy == k[:2]:
-                   xy_sum = xy_sum + v
+                    xy_sum = xy_sum + v
             distr.append(xy_sum)
 
     return [dist / sum(distr) for dist in distr]
@@ -132,6 +121,13 @@ def calc_error(model_results: Dict[str, Any]) -> float:
         return np.inf
 
 
+def get_local_error(results: Dict[str, Any]) -> float:
+    if 'kl_p_tilde_p_hat' in results:
+        return results['kl_p_tilde_p_hat']
+    else:
+        return np.inf
+
+
 def tied_rank(x):
     """
     Computes the tied rank of elements in x.
@@ -144,8 +140,8 @@ def tied_rank(x):
     score : list of numbers
             The tied rank f each element in x
     """
-    sorted_x = sorted(zip(x,range(len(x))))
-    r = [0 for k in x]
+    sorted_x = sorted(zip(x, range(len(x))))
+    r = [0 for _ in x]
     cur_val = sorted_x[0][0]
     last_rank = 0
     for i in range(len(sorted_x)):
@@ -154,7 +150,7 @@ def tied_rank(x):
             for j in range(last_rank, i):
                 r[sorted_x[j][1]] = float(last_rank+1+i)/2.0
             last_rank = i
-        if i==len(sorted_x)-1:
+        if i == len(sorted_x)-1:
             for j in range(last_rank, i+1):
                 r[sorted_x[j][1]] = float(last_rank+i+2)/2.0
     return r
@@ -177,12 +173,11 @@ def auc(actual, posterior):
             The mean squared error between actual and posterior
     """
     r = tied_rank(posterior)
-    num_positive = len([0 for x in actual if x==1])
+    num_positive = len([0 for x in actual if x == 1])
     num_negative = len(actual)-num_positive
-    sum_positive = sum([r[i] for i in range(len(r)) if actual[i]==1])
-    auc = ((sum_positive - num_positive*(num_positive+1)/2.0) /
-           (num_negative*num_positive))
-    return auc
+    sum_positive = sum([r[i] for i in range(len(r)) if actual[i] == 1])
+    return ((sum_positive - num_positive*(num_positive+1)/2.0) /
+            (num_negative*num_positive))
 
 
 def forward_auc(labels, predictions):
