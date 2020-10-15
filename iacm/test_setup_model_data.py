@@ -1,5 +1,5 @@
 import numpy as np
-from iacm.causal_models import setup_model_data, setup_causal_model_data, causal_model_definition
+from iacm.causal_models import setup_causal_model_data, causal_model_definition
 
 expected_model_data = dict()
 expected_model_data['2_2'] = {

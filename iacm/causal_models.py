@@ -8,18 +8,31 @@ obj_fct_weights_for_binary_case = [{0: 3, 1: 3, 13: 0, 15: 0},
                                    {8: 3, 10: 3, 6: 0, 7: 0}]
 
 causal_model_definition = dict()
-causal_model_definition['X|Y'] = {'V': 'X,Y,X_y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X', 'Y'], 'hidden_variables': [], 'obj_fct_weights': []}
-causal_model_definition['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': [], 'obj_fct_weights': []}
-causal_model_definition['X->Y+'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': [], 'obj_fct_weights': obj_fct_weights_for_binary_case}
-causal_model_definition['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3, 'interventional_variables': ['Z'], 'hidden_variables': [], 'obj_fct_weights': []}
-causal_model_definition['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z'], 'obj_fct_weights': []}
-causal_model_definition['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3, 'interventional_variables': ['Z', 'X'], 'hidden_variables': [], 'obj_fct_weights': []}
-causal_model_definition['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [], 'hidden_variables': ['Z'], 'obj_fct_weights': []}
-causal_model_definition['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3, 'interventional_variables': ['X', 'Z'], 'hidden_variables': [], 'obj_fct_weights': []}
-causal_model_definition['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2, 'interventional_variables': ['X'], 'hidden_variables': ['Z'], 'obj_fct_weights': []}
+causal_model_definition['X|Y'] = {'V': 'X,Y,X_y,Y_x', 'nb_observed_variables': 2,
+                                  'interventional_variables': ['X', 'Y'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['X->Y'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'],
+                                   'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['X->Y+'] = {'V': 'X,Y,Y_x', 'nb_observed_variables': 2, 'interventional_variables': ['X'],
+                                    'hidden_variables': [], 'obj_fct_weights': obj_fct_weights_for_binary_case}
+causal_model_definition['X<-Z->Y'] = {'V': 'X,Y,Z,X_z,Y_z', 'nb_observed_variables': 3,
+                                      'interventional_variables': ['Z'], 'hidden_variables': [], 'obj_fct_weights': []}
+causal_model_definition['X<-[Z]->Y'] = {'V': 'X,Y,X_z,Y_z', 'nb_observed_variables': 2, 'interventional_variables': [],
+                                        'hidden_variables': ['Z'], 'obj_fct_weights': []}
+causal_model_definition['Z->X->Y'] = {'V': 'X,Y,Z,X_z,Y_x', 'nb_observed_variables': 3,
+                                      'interventional_variables': ['Z', 'X'], 'hidden_variables': [],
+                                      'obj_fct_weights': []}
+causal_model_definition['[Z]->X->Y'] = {'V': 'X,Y,X_z,Y_x', 'nb_observed_variables': 2, 'interventional_variables': [],
+                                        'hidden_variables': ['Z'], 'obj_fct_weights': []}
+causal_model_definition['(X,Z)->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 3,
+                                       'interventional_variables': ['X', 'Z'], 'hidden_variables': [],
+                                       'obj_fct_weights': []}
+causal_model_definition['(X,[Z])->Y'] = {'V': 'X,Y,Z,Y_x,Y_z,', 'nb_observed_variables': 2,
+                                         'interventional_variables': ['X'], 'hidden_variables': ['Z'],
+                                         'obj_fct_weights': []}
 
 
-def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False) -> Dict[str, Any]:
+def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False) \
+        -> Dict[str, Any]:
     observation_variables = causal_model['V'].split(',')[0:causal_model['nb_observed_variables']]
     observed_variables_after_intervention = causal_model['V'].split(',')[causal_model['nb_observed_variables']:]
     nb_observed_variables = len(observation_variables)
@@ -65,66 +78,8 @@ def setup_causal_model_data(base: int, causal_model: Dict[str, Any], monotone_in
             d_list.append(0)
     causal_model_data['d'] = np.array(d_list)
 
-
     return causal_model_data
 
-
-def setup_model_data(base, causal_model: Dict[str, Any], monotone_incr=False, monotone_decr=False):
-    model_data = dict()
-    observation_variables = causal_model['V'].split(',')[0:causal_model['nb_observed_variables']]
-    observed_variables_after_intervention = causal_model['V'].split(',')[causal_model['nb_observed_variables']:]
-    nb_observed_variables = len(observation_variables)
-    nb_observed_variables_after_intervention = len(observed_variables_after_intervention)
-    nb_variables = nb_observed_variables + nb_observed_variables_after_intervention * base
-    size_prob = pow(base, nb_variables)
-    model_data['base_x'] = base
-    model_data['base_y'] = base
-    model_data['nb_variables'] = nb_variables
-    model_data['size_prob'] = size_prob
-    model_data['interventional_variables'] = causal_model['interventional_variables']
-    model_data['obj_fct_weights'] = causal_model['obj_fct_weights']
-
-    pattern_data = generate_pattern_data(base=base, observation_variables=observation_variables,
-                                         observed_variables_after_intervention=observed_variables_after_intervention,
-                                         interventional_variables=causal_model['interventional_variables'],
-                                         hidden_variables=causal_model['hidden_variables'])
-    #pattern_data = generate_pattern_data(base=base, nb_observations=2, nb_interventions=nb_variables-2, nb_intervention_variables=1)
-    model_data['constraint_patterns'] = pattern_data[base]['constraint_patterns']
-
-    lines = generate_constraint_lines(pattern_data[base]['constraint_patterns'], size_prob, base)
-    model_data['B'] = np.array([[1] * size_prob] + lines)
-
-    model_data['F'] = np.diag(np.array([1] * size_prob))
-    model_data['c'] = np.array([0.0] * size_prob)
-
-    zero_codes = get_zero_codes(pattern_data[base]['zero_code_patterns'], base)
-    if monotone_decr:
-        zero_codes.append('0001')
-        zero_codes.append('1101')
-    if monotone_incr:
-        zero_codes.append('0110')
-        zero_codes.append('1010')
-    model_data['S_codes'] = s_codes(zero_codes, base, nb_variables)
-    d_list = list()
-    for i in range(0, size_prob):
-        if base_repr(i, base, nb_variables) in model_data['S_codes']:
-            d_list.append(1)
-            model_data['c'][i] = 0.00001
-        else:
-            d_list.append(0)
-    model_data['d'] = np.array(d_list)
-
-    return model_data
-
-
-# pattern_data = {2: {'constraint_patterns': ['xxx1', 'xx1x', '11xx', '10xx', '01xx'],
-#                     'zero_code_patterns': ['001x', '010x', '10x1', '11x0']},# '1001', '0101']},
-#                 3: {'constraint_patterns': ['xxxx1', 'xxx1x', 'xx1xx', 'xxxx2', 'xxx2x', 'xx2xx',
-#                                             '22xxx', '21xxx', '20xxx', '12xxx', '11xxx', '10xxx', '02xxx', '01xxx'],
-#                     'zero_code_patterns': ['001xx', '002xx', '010xx', '012xx', '020xx', '021xx',
-#                                            '10x1x', '10x2x', '11x0x', '11x2x', '12x0x', '12x1x',
-#                                            '20xx1', '20xx2', '21xx0', '21xx2', '22xx0', '22xx1']}
-#                 }
 
 def generate_pattern_data(base: int, observation_variables: List[str], observed_variables_after_intervention: List[str],
                           interventional_variables: List[str], hidden_variables: List[str]) -> Dict:
@@ -146,7 +101,8 @@ def generate_pattern_data(base: int, observation_variables: List[str], observed_
     for observed_value in range(pow(base, nb_observations)-1, -1, -1):
         if observed_value == 0:
             continue
-        constraint_patterns.append(insert(pattern_template, base_repr(observed_value, base, nb_observations), nb_observations))
+        constraint_patterns.append(insert(pattern_template, base_repr(observed_value, base, nb_observations),
+                                          nb_observations))
 
     # generate zero_code_patterns
     zero_code_patterns = list()
@@ -169,14 +125,14 @@ def generate_pattern_data(base: int, observation_variables: List[str], observed_
                         continue
                     observation_var_after_intervention = observation_var + '_' + intervention_var.lower()
                     if observation_var_after_intervention in observed_variables_after_intervention_mapping.keys():
-                        adjusted_variable_index = observed_variables_after_intervention_mapping[observation_var_after_intervention]
+                        adjusted_variable_index = \
+                            observed_variables_after_intervention_mapping[observation_var_after_intervention]
                     else:
                         continue
                     if intervention_var in observation_variables_mapping:
                         intervention_index = observation_variables_mapping[intervention_var]
                         observation_data_at_intervention_index = int(observation_data[intervention_index])
-                        if observation_data[observation_var_index] != intervention_data[
-                            adjusted_variable_index * base + observation_data_at_intervention_index]:
+                        if observation_data[observation_var_index] != intervention_data[adjusted_variable_index * base + observation_data_at_intervention_index]:
                             intervention_pattern = insert(intervention_template, intervention_data[
                                 adjusted_variable_index * base + observation_data_at_intervention_index],
                                                           adjusted_variable_index * base + observation_data_at_intervention_index + 1)
@@ -257,4 +213,5 @@ def replace_char_by_char(char_to_replaced, str_to_be_replaced, to_be_inserted_st
 def marginal_distribution(p, fixed_code):
     nb_x = count_char(fixed_code, 'x')
     format_str = '{0:0xb}'.replace('x', str(nb_x))
-    return sum([p[replace_char_by_char('x', fixed_code, format_str.format(code_nb))] for code_nb in range(0, pow(2, nb_x))])
+    return sum([p[replace_char_by_char('x', fixed_code, format_str.format(code_nb))]
+                for code_nb in range(0, pow(2, nb_x))])
